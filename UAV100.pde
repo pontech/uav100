@@ -1,3 +1,9 @@
+#define s8 signed char
+#define s16 signed int
+#define s32 signed long
+#define us8 unsigned char
+#define us16 unsigned int
+#define us32 unsigned long
 // Example chipKIT sketch for precise control of up to
 // eight servos with low instruction overhead.  Exploits
 // the fact that servo PWM uses a relatively small duty
@@ -38,7 +44,7 @@
 // not for any important reason.  These can be changed
 // to most anything EXCEPT pin 3, and they do not need
 // to be consecutive pins nor in-order.
-byte servoPin[8] = { 13, 12H, 16, 17, 18, 19, 20, 21 };
+byte servoPin[8] = { 12, 11, 16, 17, 18, 19, 20, 21 };
 
 // This code assumes servo timings with the canonical
 // 50 Hz (20 millisecond) frequency with a 1.0 to 2.0
@@ -65,6 +71,9 @@ byte servoPin[8] = { 13, 12H, 16, 17, 18, 19, 20, 21 };
 // Just load position data into this array; interrupts will
 // take care of the rest, no need for any function calls.
 servo_t servoPos[8];
+us8 buff[0x20];
+us8 ctr;
+us8 ch;
 
 void setup()
 {
@@ -74,6 +83,7 @@ void setup()
     digitalWrite(servoPin[i], LOW);
     servoPos[i] = 0;
   }
+  Serial.begin(9600);
 
   // Initialize timer to 400 Hz (50 Hz * 8 servos)
 #ifdef EXTRA_RES
@@ -104,7 +114,44 @@ float x = 0.0;  // Used only for motion demo below; not servo driver
 
 void loop()
 {
-  float y = x;
+  if (Serial.available() > 0)
+  {
+    ch = Serial.read();
+    if( ctr < 0x20) {
+      buff[ctr++] = ch;
+    }
+
+    if (ch == '\r')
+    {
+      buff[--ctr] = 0;
+      ctr = 0;
+      ch = buff[0];
+      if( strcmp( (const char *)buff, "s0 1" ) == 0 ) {
+        servoPos[0] = SERVO_MIN;
+        Serial.println("OK");
+      }
+      if( strcmp( (const char *)buff, "s0 2" ) == 0 ) {
+        servoPos[0] = SERVO_MAX;
+        Serial.println("OK");
+      }
+      if( strcmp( (const char *)buff, "s1 1" ) == 0 ) {
+        servoPos[1] = SERVO_MIN;
+        Serial.println("OK");
+      }
+      if( strcmp( (const char *)buff, "s1 2" ) == 0 ) {
+        servoPos[1] = SERVO_MAX;
+        Serial.println("OK");
+      }
+      if( strcmp( (const char *)buff, "home" ) == 0 ) {
+        Serial.print(SERVO_MIN);
+        Serial.println(" OK");
+        Serial.print(SERVO_MAX);
+        Serial.println(" OK");
+      }
+    }
+  }
+
+/*  float y = x;
   for(int i = 0; i < 8;i ++) {
     servoPos[i] = SERVO_CENTER +
       (int)((float)(SERVO_MAX - SERVO_CENTER) * sin(y));
@@ -113,7 +160,7 @@ void loop()
   x += M_PI / 100.0;
 
   delay(20);  // No point updating faster than servo pulses
-}
+*/}
 
 extern "C"
 {
