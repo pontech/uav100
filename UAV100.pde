@@ -4,35 +4,6 @@
 #define us8 unsigned char
 #define us16 unsigned int
 #define us32 unsigned long
-// Example chipKIT sketch for precise control of up to
-// eight servos with low instruction overhead.  Exploits
-// the fact that servo PWM uses a relatively small duty
-// cycle range for a full range of movement: servo pulses
-// are offset (rather than synchronized) so that each has
-// the full resolution of a PWM timer for 1/8 of the time:
-//   _               _
-// _| |_____________| |___ Servo 0
-//     _               _
-// ___| |_____________| |_ Servo 1
-//       _               _
-// _____| |_____________|  Servo 2
-//         _
-// _______| |_____________ Servo 3
-//           _
-// _________| |___________ Servo 4
-//             _
-// ___________| |_________ Servo 5
-//               _
-// _____________| |_______ Servo 6
-// _               _
-//  |_____________| |_____ Servo 7
-//
-// This is a compromise between fully hardware-based
-// servo PWM (zero instruction overhead or timing
-// jitter, but limited to 5 outputs on PIC32) and
-// "tick counting" approaches, which permit any number
-// of outputs but may have limited resolution and/or
-// higher instruction overhead.
 // Uses one or two timers, output compare and interrupts
 // to achieve better than 14-bit resolution with 8 servos
 // (or better than 16-bit if EXTRA_RES is #defined
@@ -62,19 +33,11 @@ byte servoPin[8] = { 12, 11, 16, 17, 18, 19, 20, 21 };
 #endif
 #define SERVO_MAX    (SERVO_MIN * 2)               // 2.0 mS
 #define SERVO_CENTER ((SERVO_MIN + SERVO_MAX) / 2) // 1.5 mS
-// With lots of clever shenanigans, this idea could be
-// expanded to upwards of 20 servos, but this would start
-// to invoke limitations and assumptions that may not
-// apply to all servo setups; the broadest "sure thing"
-// case is implemented here.
-
-// Just load position data into this array; interrupts will
-// take care of the rest, no need for any function calls.
-servo_t servoPos[8];
+servo_t servoPos[8];//array that holds servo positions
 us8 buff[0x20];
 us8 ctr;
 us8 ch;
-
+volatile int state = LOW;
 void setup()
 {
   // Enable output pins for servos, set inital states to 'off'
@@ -84,6 +47,8 @@ void setup()
     servoPos[i] = 0;
   }
   Serial.begin(9600);
+  pinMode(13,OUTPUT);
+  attachInterrupt(0, testInterrupt, RISING);
 
   // Initialize timer to 400 Hz (50 Hz * 8 servos)
 #ifdef EXTRA_RES
@@ -116,6 +81,7 @@ void loop()
 {
   if (Serial.available() > 0)
   {
+    digitalWrite(13, state);
     ch = Serial.read();
     if( ctr < 0x20) {
       buff[ctr++] = ch;
@@ -161,6 +127,12 @@ void loop()
 
   delay(20);  // No point updating faster than servo pulses
 */}
+
+void testInterrupt()
+{
+  state = !state;
+  Serial.println("int");
+}
 
 extern "C"
 {
