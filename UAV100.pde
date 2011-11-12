@@ -3,7 +3,7 @@
 #define s32 signed long
 #define us8 unsigned char
 #define us16 unsigned int
-#define us32 unsigned long
+#define us32 long unsigned
 // Uses one or two timers, output compare and interrupts
 // to achieve better than 14-bit resolution with 8 servos
 // (or better than 16-bit if EXTRA_RES is #defined
@@ -16,6 +16,8 @@
 // to most anything EXCEPT pin 3, and they do not need
 // to be consecutive pins nor in-order.
 byte servoPin[8] = { 12, 11, 16, 17, 18, 19, 20, 21 };
+us32 risingtime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+us32 intime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
 // This code assumes servo timings with the canonical
 // 50 Hz (20 millisecond) frequency with a 1.0 to 2.0
@@ -48,7 +50,7 @@ void setup()
   }
   Serial.begin(9600);
   pinMode(13,OUTPUT);
-  attachInterrupt(0, testInterrupt, RISING);
+  attachInterrupt(1, RisingInterrupt, RISING);
 
   // Initialize timer to 400 Hz (50 Hz * 8 servos)
 #ifdef EXTRA_RES
@@ -86,7 +88,9 @@ void loop()
     if( ctr < 0x20) {
       buff[ctr++] = ch;
     }
-
+    
+ //Serial.println(intime[0]); // todo: 2 buffer this value
+ 
     if (ch == '\r')
     {
       buff[--ctr] = 0;
@@ -108,12 +112,11 @@ void loop()
         servoPos[1] = SERVO_MAX;
         Serial.println("OK");
       }
-      if( strcmp( (const char *)buff, "home" ) == 0 ) {
-        Serial.print(SERVO_MIN);
-        Serial.println(" OK");
-        Serial.print(SERVO_MAX);
-        Serial.println(" OK");
+      if( strcmp( (const char *)buff, "follow" ) == 0 ) {
+        servoPos[0] = 20*intime[0];
+        Serial.println("OK");
       }
+     delay(20);
     }
   }
 
@@ -128,10 +131,15 @@ void loop()
   delay(20);  // No point updating faster than servo pulses
 */}
 
-void testInterrupt()
+void RisingInterrupt()
 {
-  state = !state;
-  Serial.println("int");
+ attachInterrupt(1, FallingInterrupt, FALLING);
+ risingtime[0]=micros();
+}
+void FallingInterrupt()
+{
+ attachInterrupt(1, RisingInterrupt, RISING);
+ intime[0]=micros()-risingtime[0];
 }
 
 extern "C"
