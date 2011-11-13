@@ -72,6 +72,18 @@ void setup()
   ConfigIntOC1(OC_INT_ON | OC_INT_PRIOR_3);
   OpenOC1(OC_ON | OC_IDLE_CON | OC_TIMER3_SRC | OC_CONTINUE_PULSE, 0, 0);
 #endif
+us16 value;
+TRISBSET = 0x04;
+IEC0CLR = 0x10000000;   //turn intrupts off
+AD1PCFGSET = 0x04;     //turn analog 2 off
+CNCON = 0x00008000;   //turn "interrupt on change" on
+CNEN = 0x00000010;   //enable cn4
+CNPUE= 0x00000010; //weak pull up
+value = PORTB;      //Read the Port
+IPC6SET = 0x001f0000; //set priority to 7 sub 4
+IFS1CLR = 0x0001; //clear the interupt flag bit
+IEC1SET= 0x0001; // Enable Change Notice interrupts
+IEC0SET = 0x10000000;   //turn intrupts on
 }
 
 // Motion example generates a nice millipede-like sine wave
@@ -88,7 +100,7 @@ void loop()
     if( ctr < 0x20) {
       buff[ctr++] = ch;
     }
-    
+    //digitalWrite(13, state);   // set the LED on
  //Serial.println(intime[0]); // todo: 2 buffer this value
  
     if (ch == '\r')
@@ -115,6 +127,9 @@ void loop()
       if( strcmp( (const char *)buff, "follow" ) == 0 ) {
         servoPos[0] = 20*intime[0];
         Serial.println("OK");
+      }
+      if( strcmp( (const char *)buff, "readb" ) == 0 ) {
+        Serial.println(PORTB, HEX);
       }
      delay(20);
     }
@@ -172,6 +187,15 @@ void __ISR(_OUTPUT_COMPARE_1_VECTOR,ipl3) pwmOff(void)
   mOC1ClearIntFlag();
   digitalWrite(servoPin[servoNum], LOW);
   if(++servoNum > 7) servoNum = 0;  // Back to start
+}
+void __ISR(_CHANGE_NOTICE_VECTOR, ipl5) CN_Interrupt_ISR(void)
+{
+unsigned int value;
+value = PORTB; // Read PORTB to clear CN2 mismatch condition
+state=!state;//... perform application specific operations in response to the interrupt
+digitalWrite(13, state);
+IFS1CLR = 0x0001; // Be sure to clear the CN interrupt status
+                  // flag before exiting the service routine.
 }
 
 } // end extern "C"
