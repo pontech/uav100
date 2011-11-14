@@ -15,9 +15,10 @@
 // not for any important reason.  These can be changed
 // to most anything EXCEPT pin 3, and they do not need
 // to be consecutive pins nor in-order.
-byte servoPin[8] = { 4, 5, 6, 7, 8, 9, 10, 11 };
+byte servoPin[8] = { 4, 5, 6, 7, 8, 9, 11, 12 };
 us32 risingtime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 us32 intime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+us32 lastused[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
 // This code assumes servo timings with the canonical
 // 50 Hz (20 millisecond) frequency with a 1.0 to 2.0
@@ -72,23 +73,24 @@ void setup()
   ConfigIntOC1(OC_INT_ON | OC_INT_PRIOR_3);
   OpenOC1(OC_ON | OC_IDLE_CON | OC_TIMER3_SRC | OC_CONTINUE_PULSE, 0, 0);
 #endif
-us16 value;
-TRISBSET = 0x803f;
-TRISDSET = 0x20;
-IEC0CLR = 0x10000000;   //turn intrupts off
-AD1PCFGSET = 0x0000803c;     //turn analog 2-5,15 off 0x0000403c
-AD1CON2CLR = 0x0000d000; //turn off external voltage compare pins?
-CNCON = 0x00008000;   //turn "interrupt on change" on
-CNEN = 0x000090fc;   //enable cn2-7,12,15
-CNPUE= 0x00000000; //weak pull up off
-value = PORTB;      //Read the Ports
-value = PORTD;
-IPC6SET = 0x001f0000; //set priority to 7 sub 4
-IFS1CLR = 0x0001; //clear the interupt flag bit
-IEC1SET= 0x0001; // Enable Change Notice interrupts
-IEC0SET = 0x10000000;   //turn intrupts on
+  us16 value;
+  TRISBSET = 0x803f;
+  TRISDSET = 0x20;
+  IEC0CLR = 0x10000000;   //turn intrupts off
+  AD1PCFGSET = 0x0000803c;     //turn analog 2-5,15 off 0x0000403c
+  AD1CON2CLR = 0x0000d000; //turn off external voltage compare pins?
+  CNCON = 0x00008000;   //turn "interrupt on change" on
+  CNEN = 0x000090fc;   //enable cn2-7,12,15
+  CNPUE= 0x00000000; //weak pull up off
+  value = PORTB;      //Read the Ports
+  value = PORTD;
+  IPC6SET = 0x001f0000; //set priority to 7 sub 4
+  IFS1CLR = 0x0001; //clear the interupt flag bit
+  IEC1SET= 0x0001; // Enable Change Notice interrupts
+  IEC0SET = 0x10000000;   //turn intrupts on
   pinMode(41, INPUT);
   pinMode(42, INPUT);
+  pinMode(36, INPUT);
 }
 
 
@@ -96,11 +98,13 @@ float x = 0.0;  // Used only for motion demo below; not servo driver
 
 void loop()
 {
-//  digitalWrite(43, digitalRead(42));
-  
-    //digitalWrite(43, state);   // set the LED on
-    //Serial.println(intime[0]);
-
+for(us8 i=0;i<8;i++){
+  us32 nowa=micros();
+  us32 last;
+  last=(nowa>lastused[i]) ? nowa-lastused[i] : (0xffffffff - lastused[i]) + nowa;
+  if (last>100000)
+   intime[i]=0;
+}
   if (Serial.available() > 0)
   {
     ch = Serial.read();
@@ -208,66 +212,75 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
   
 us16 static lastb;
 us16 static lastd;
+us32 now;
+now = micros();
 if ((PORTB & 0x01) != (lastb & 0x01)) //cn2
  {
- if (PORTB & 0x01) //cn2
-  risingtime[0]=micros();// todo: 2 account for micros 70 minute wraparound
+ lastused[0]=now;
+ if (PORTB & 0x01) 
+  risingtime[0]=now;
  else
-  intime[0]=micros()-risingtime[0];
+  intime[0]=(now>risingtime[0]) ? now-risingtime[0] : (0xffffffff - risingtime[0]) + now;
  }
-if ((PORTB & 0x02) != (lastb & 0x02)) //cn3
+ if ((PORTB & 0x02) != (lastb & 0x02)) //cn3
  {
- if (PORTB & 0x02) //cn3
-  risingtime[1]=micros();
+ lastused[1]=now;
+ if (PORTB & 0x02)
+ risingtime[1]=now;
  else
-  intime[1]=micros()-risingtime[1];
+  intime[1]=(now>risingtime[1]) ? now-risingtime[1] : (0xffffffff - risingtime[1]) + now;
  }
-if ((PORTB & 0x04) != (lastb & 0x04)) //cn4
+ if ((PORTB & 0x04) != (lastb & 0x04)) //cn4
  {
+ lastused[2]=now;
  if (PORTB & 0x04) //cn4
-  risingtime[2]=micros();
+  risingtime[2]=now;
  else
-  intime[2]=micros()-risingtime[2];
+  intime[2]=(now>risingtime[2]) ? now-risingtime[2] : (0xffffffff - risingtime[2]) + now;
  }
-if ((PORTB & 0x08) != (lastb & 0x08)) //cn5
+ if ((PORTB & 0x08) != (lastb & 0x08)) //cn5
  {
+ lastused[3]=now;
  if (PORTB & 0x08)
-  risingtime[3]=micros();
+  risingtime[3]=now;
  else
-  intime[3]=micros()-risingtime[3];
+  intime[3]=(now>risingtime[3]) ? now-risingtime[3] : (0xffffffff - risingtime[3]) + now;
  }
-if ((PORTB & 0x10) != (lastb & 0x10)) //cn6
+ if ((PORTB & 0x10) != (lastb & 0x10)) //cn6
  {
- if (PORTB & 0x10)
-  risingtime[4]=micros();
- else
-  intime[4]=micros()-risingtime[4];
+  lastused[4]=now;
+  if (PORTB & 0x10)
+   risingtime[4]=now;
+  else
+   intime[4]=(now>risingtime[4]) ? now-risingtime[4] : (0xffffffff - risingtime[4]) + now;
  }
-if ((PORTB & 0x20) != (lastb & 0x20)) //cn7
- {
- if (PORTB & 0x20) 
-  risingtime[5]=micros();
- else
-  intime[5]=micros()-risingtime[5];
- }
-if ((PORTB & 0x8000) != (lastb & 0x8000)) //cn12
- {
- if (PORTB & 0x8000)
-  risingtime[6]=micros();
- else
-  intime[6]=micros()-risingtime[6];
- }
-if ((PORTD & 0x20) != (lastd & 0x20)) //cn15
- {
- if (PORTD & 0x20)
-  risingtime[7]=micros();
- else
-  intime[7]=micros()-risingtime[7];
- }
-lastb = PORTB; // Read PORTB to clear mismatch condition
-lastd = PORTD; // Read PORTD to clear mismatch condition
-
-IFS1CLR = 0x0001; // Be sure to clear the CN interrupt status
+ if ((PORTB & 0x20) != (lastb & 0x20)) //cn7
+  {
+  lastused[5]=now;
+  if (PORTB & 0x20) 
+   risingtime[5]=now;
+  else
+   intime[5]=(now>risingtime[5]) ? now-risingtime[5] : (0xffffffff - risingtime[5]) + now;
+  }
+ if ((PORTB & 0x8000) != (lastb & 0x8000)) //cn12
+  {
+ lastused[6]=now;
+  if (PORTB & 0x8000)
+   risingtime[6]=now;
+  else
+   intime[6]=(now>risingtime[6]) ? now-risingtime[6] : (0xffffffff - risingtime[6]) + now;
+  }
+ if ((PORTD & 0x40) != (lastd & 0x40)) //cn15
+  {
+  lastused[7]=now;
+  if (PORTD & 0x40)
+   risingtime[7]=now;
+  else
+   intime[7]=(now>risingtime[7]) ? now-risingtime[7] : (0xffffffff - risingtime[7]) + now;
+  }
+ lastb = PORTB; // Read PORTB to clear mismatch condition
+ lastd = PORTD; // Read PORTD to clear mismatch condition
+ IFS1CLR = 0x0001; // Be sure to clear the CN interrupt status
                   // flag before exiting the service routine.
 }
 
