@@ -15,7 +15,7 @@
 // not for any important reason.  These can be changed
 // to most anything EXCEPT pin 3, and they do not need
 // to be consecutive pins nor in-order.
-byte servoPin[8] = { 12, 11, 16, 17, 18, 19, 20, 21 };
+byte servoPin[8] = { 4, 5, 6, 7, 8, 9, 10, 11 };
 us32 risingtime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 us32 intime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
 
@@ -49,7 +49,7 @@ void setup()
     servoPos[i] = 0;
   }
   Serial.begin(9600);
-  pinMode(13,OUTPUT);
+  pinMode(13, OUTPUT);
   attachInterrupt(1, RisingInterrupt, RISING);
 
   // Initialize timer to 400 Hz (50 Hz * 8 servos)
@@ -73,34 +73,40 @@ void setup()
   OpenOC1(OC_ON | OC_IDLE_CON | OC_TIMER3_SRC | OC_CONTINUE_PULSE, 0, 0);
 #endif
 us16 value;
-TRISBSET = 0x04;
+TRISBSET = 0x803f;
+TRISDSET = 0x20;
 IEC0CLR = 0x10000000;   //turn intrupts off
-AD1PCFGSET = 0x04;     //turn analog 2 off
+AD1PCFGSET = 0x0000803c;     //turn analog 2-5,15 off 0x0000403c
+AD1CON2CLR = 0x0000d000; //turn off external voltage compare pins?
 CNCON = 0x00008000;   //turn "interrupt on change" on
-CNEN = 0x00000010;   //enable cn4
-CNPUE= 0x00000010; //weak pull up
-value = PORTB;      //Read the Port
+CNEN = 0x000090fc;   //enable cn2-7,12,15
+CNPUE= 0x00000000; //weak pull up off
+value = PORTB;      //Read the Ports
+value = PORTD;
 IPC6SET = 0x001f0000; //set priority to 7 sub 4
 IFS1CLR = 0x0001; //clear the interupt flag bit
 IEC1SET= 0x0001; // Enable Change Notice interrupts
 IEC0SET = 0x10000000;   //turn intrupts on
+  pinMode(41, INPUT);
+  pinMode(42, INPUT);
 }
 
-// Motion example generates a nice millipede-like sine wave
-// across a row of eight servos.
 
 float x = 0.0;  // Used only for motion demo below; not servo driver
 
 void loop()
 {
+//  digitalWrite(43, digitalRead(42));
+  
+    //digitalWrite(43, state);   // set the LED on
+    //Serial.println(intime[0]);
+
   if (Serial.available() > 0)
   {
-    digitalWrite(13, state);
     ch = Serial.read();
     if( ctr < 0x20) {
       buff[ctr++] = ch;
     }
-    //digitalWrite(13, state);   // set the LED on
  //Serial.println(intime[0]); // todo: 2 buffer this value
  
     if (ch == '\r')
@@ -108,34 +114,40 @@ void loop()
       buff[--ctr] = 0;
       ctr = 0;
       ch = buff[0];
-      if( strcmp( (const char *)buff, "s0 1" ) == 0 ) {
+      if( strcmp( (const char *)buff, "s0 0" ) == 0 ) {
         servoPos[0] = SERVO_MIN;
         Serial.println("OK");
       }
-      if( strcmp( (const char *)buff, "s0 2" ) == 0 ) {
+      if( strcmp( (const char *)buff, "s0 1" ) == 0 ) {
         servoPos[0] = SERVO_MAX;
         Serial.println("OK");
       }
-      if( strcmp( (const char *)buff, "s1 1" ) == 0 ) {
+      if( strcmp( (const char *)buff, "s1 0" ) == 0 ) {
         servoPos[1] = SERVO_MIN;
         Serial.println("OK");
       }
-      if( strcmp( (const char *)buff, "s1 2" ) == 0 ) {
+      if( strcmp( (const char *)buff, "s1 1" ) == 0 ) {
         servoPos[1] = SERVO_MAX;
+        Serial.println("OK");
+      }
+      if( strcmp( (const char *)buff, "s2 0" ) == 0 ) {
+        servoPos[2] = SERVO_MAX;
         Serial.println("OK");
       }
       if( strcmp( (const char *)buff, "follow" ) == 0 ) {
         servoPos[0] = 20*intime[0];
         Serial.println("OK");
       }
-      if( strcmp( (const char *)buff, "readb" ) == 0 ) {
-        Serial.println(PORTB, HEX);
+      if( strcmp( (const char *)buff, "times" ) == 0 ) {
+        us8 i;
+        for(i=0;i<8;i++) {
+        Serial.println(intime[i]);
+        }
       }
-     delay(20);
     }
   }
 
-/*  float y = x;
+  float y = x;
   for(int i = 0; i < 8;i ++) {
     servoPos[i] = SERVO_CENTER +
       (int)((float)(SERVO_MAX - SERVO_CENTER) * sin(y));
@@ -144,7 +156,7 @@ void loop()
   x += M_PI / 100.0;
 
   delay(20);  // No point updating faster than servo pulses
-*/}
+}
 
 void RisingInterrupt()
 {
@@ -188,12 +200,73 @@ void __ISR(_OUTPUT_COMPARE_1_VECTOR,ipl3) pwmOff(void)
   digitalWrite(servoPin[servoNum], LOW);
   if(++servoNum > 7) servoNum = 0;  // Back to start
 }
-void __ISR(_CHANGE_NOTICE_VECTOR, ipl5) CN_Interrupt_ISR(void)
+
+void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
 {
-unsigned int value;
-value = PORTB; // Read PORTB to clear CN2 mismatch condition
-state=!state;//... perform application specific operations in response to the interrupt
-digitalWrite(13, state);
+  bool temp = digitalRead(43);
+  digitalWrite(43, temp ^ 1);
+  
+us16 static lastb;
+us16 static lastd;
+if ((PORTB & 0x01) != (lastb & 0x01)) //cn2
+ {
+ if (PORTB & 0x01) //cn2
+  risingtime[0]=micros();// todo: 2 account for micros 70 minute wraparound
+ else
+  intime[0]=micros()-risingtime[0];
+ }
+if ((PORTB & 0x02) != (lastb & 0x02)) //cn3
+ {
+ if (PORTB & 0x02) //cn3
+  risingtime[1]=micros();
+ else
+  intime[1]=micros()-risingtime[1];
+ }
+if ((PORTB & 0x04) != (lastb & 0x04)) //cn4
+ {
+ if (PORTB & 0x04) //cn4
+  risingtime[2]=micros();
+ else
+  intime[2]=micros()-risingtime[2];
+ }
+if ((PORTB & 0x08) != (lastb & 0x08)) //cn5
+ {
+ if (PORTB & 0x08)
+  risingtime[3]=micros();
+ else
+  intime[3]=micros()-risingtime[3];
+ }
+if ((PORTB & 0x10) != (lastb & 0x10)) //cn6
+ {
+ if (PORTB & 0x10)
+  risingtime[4]=micros();
+ else
+  intime[4]=micros()-risingtime[4];
+ }
+if ((PORTB & 0x20) != (lastb & 0x20)) //cn7
+ {
+ if (PORTB & 0x20) 
+  risingtime[5]=micros();
+ else
+  intime[5]=micros()-risingtime[5];
+ }
+if ((PORTB & 0x8000) != (lastb & 0x8000)) //cn12
+ {
+ if (PORTB & 0x8000)
+  risingtime[6]=micros();
+ else
+  intime[6]=micros()-risingtime[6];
+ }
+if ((PORTD & 0x20) != (lastd & 0x20)) //cn15
+ {
+ if (PORTD & 0x20)
+  risingtime[7]=micros();
+ else
+  intime[7]=micros()-risingtime[7];
+ }
+lastb = PORTB; // Read PORTB to clear mismatch condition
+lastd = PORTD; // Read PORTD to clear mismatch condition
+
 IFS1CLR = 0x0001; // Be sure to clear the CN interrupt status
                   // flag before exiting the service routine.
 }
