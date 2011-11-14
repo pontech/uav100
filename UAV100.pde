@@ -1,3 +1,6 @@
+#include <core.h>
+#include <TokenParser.h>
+
 #define s8 signed char
 #define s16 signed int
 #define s32 signed long
@@ -115,34 +118,25 @@ for(us8 i=0;i<8;i++){
  
     if (ch == '\r')
     {
-      buff[--ctr] = 0;
+      buff[ctr-1] = ' ';
+      TokenParser tokpars(buff,ctr);
+      tokpars.nextToken();
       ctr = 0;
-      ch = buff[0];
-      if( strcmp( (const char *)buff, "s0 0" ) == 0 ) {
-        servoPos[0] = SERVO_MIN;
+      //ch = buff[0];
+      if( tokpars.compare("s?" ) ) {
+        tokpars.advanceTail(1);
+        e16 num1 = tokpars.to_e16();
+        tokpars.nextToken();
+        e16 num2 = tokpars.to_e16();
+        
+        servoPos[num1.value] = num2.value;
         Serial.println("OK");
       }
-      if( strcmp( (const char *)buff, "s0 1" ) == 0 ) {
-        servoPos[0] = SERVO_MAX;
-        Serial.println("OK");
-      }
-      if( strcmp( (const char *)buff, "s1 0" ) == 0 ) {
-        servoPos[1] = SERVO_MIN;
-        Serial.println("OK");
-      }
-      if( strcmp( (const char *)buff, "s1 1" ) == 0 ) {
-        servoPos[1] = SERVO_MAX;
-        Serial.println("OK");
-      }
-      if( strcmp( (const char *)buff, "s2 0" ) == 0 ) {
-        servoPos[2] = SERVO_MAX;
-        Serial.println("OK");
-      }
-      if( strcmp( (const char *)buff, "follow" ) == 0 ) {
+      if( tokpars.compare("follow") ) {
         servoPos[0] = 20*intime[0];
         Serial.println("OK");
       }
-      if( strcmp( (const char *)buff, "times" ) == 0 ) {
+      if( tokpars.compare("times") ) {
         us8 i;
         for(i=0;i<8;i++) {
         Serial.println(intime[i]);
@@ -151,7 +145,7 @@ for(us8 i=0;i<8;i++){
     }
   }
 
-  float y = x;
+/*  float y = x;
   for(int i = 0; i < 8;i ++) {
     servoPos[i] = SERVO_CENTER +
       (int)((float)(SERVO_MAX - SERVO_CENTER) * sin(y));
@@ -160,7 +154,7 @@ for(us8 i=0;i<8;i++){
   x += M_PI / 100.0;
 
   delay(20);  // No point updating faster than servo pulses
-}
+*/}
 
 void RisingInterrupt()
 {
