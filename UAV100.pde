@@ -7,6 +7,12 @@
 #define us8 unsigned char
 #define us16 unsigned int
 #define us32 long unsigned
+typedef struct {
+    us8 board;
+    us32 bitrate;
+    us8 mapping[16];
+    us16 spe;
+} ram_struct;
 // Uses one or two timers, output compare and interrupts
 // to achieve better than 14-bit resolution with 8 servos
 // (or better than 16-bit if EXTRA_RES is #defined
@@ -17,18 +23,6 @@
 // These can be changed
 // to most anything EXCEPT pin 3, and they do not need
 // to be consecutive pins nor in-order.
-byte servoPin[8] = { 4, 5, 6, 7, 8, 9, 11, 12 }; //servo pins
-us32 risingtime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track risetimes
-us32 intime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //time value was high
-us32 lastused[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track last time a value was captured
-
-// This code assumes servo timings with the canonical
-// 50 Hz (20 millisecond) frequency with a 1.0 to 2.0
-// millisecond pulse for position.  Some servos are
-// capable of operating beyond this range, but the
-// timings here are set up for the conservative case.
-// The longest pulse this can handle is 2.5 mS due to
-// the 8-way split of the 20 mS interval.
 #ifdef EXTRA_RES
   #define SERVO_MIN  (F_CPU / 1000)                // 1.0 mS
   typedef int servo_t;
@@ -38,11 +32,22 @@ us32 lastused[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track last time a value was cap
 #endif
 #define SERVO_MAX    (SERVO_MIN * 2)               // 2.0 mS
 #define SERVO_CENTER ((SERVO_MIN + SERVO_MAX) / 2) // 1.5 mS
+
+byte servoPin[8] = { 4, 5, 6, 7, 8, 9, 11, 12 }; //servo pins
+us32 risingtime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track risetimes
+us32 intime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //time value was high
+us32 lastused[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track last time a value was captured
+ram_struct ram;
+
 servo_t servoPos[8];//array that holds servo positions
 us8 buff[0x20];
 us8 ctr;
 us8 ch;
 volatile int state = LOW;
+us8 servo;
+us8 mapping[16];
+bool active = false;
+
 void setup()
 {
   // Enable output pins for servos, set inital states to 'off'
@@ -93,13 +98,16 @@ void setup()
   pinMode(41, INPUT);
   pinMode(42, INPUT);
   pinMode(36, INPUT);
+  
+  ram.board=1;
 }
 
 
 float x = 0.0;  // Used only for motion demo below; not servo driver
-
 e16 num1;
 e16 num2;
+e32 num3;
+
 
 void loop()
 {
@@ -126,184 +134,227 @@ for(us8 i=0;i<8;i++){ //zero the values if no input for 100 ms
       ctr = 0;
       //ch = buff[0];
       if( tokpars.compare("BD?" ) ) {
-        tokpars.advanceTail(2);
-        num1 = tokpars.to_e16();
-        Serial.print("Board ");
-        Serial.print(num1.value);
-        PrintCR();
-      }
-      else if( tokpars.compare("BR?" ) ) {
-        tokpars.advanceTail(2);
-        num1 = tokpars.to_e16();
-        Serial.print("Bit Rate ");
-        Serial.print(num1.value);
-        PrintCR();
-      }
-      else if( tokpars.compare("WR?" ) ) {
-        tokpars.advanceTail(2);
-        num1 = tokpars.to_e16();
-        tokpars.nextToken();
-        num2 = tokpars.to_e16();
-        Serial.print("Write ");
-        Serial.print(num2.value);
-        Serial.print(" to ");
-        Serial.print(num1.value);
-        PrintCR();
-      }
-      else if( tokpars.compare("RR?" ) ) {
-        tokpars.advanceTail(2);
-        num1 = tokpars.to_e16();
-        Serial.print("Read from ");
-        Serial.print(num1.value);
-        PrintCR();
-      }
-      else if( tokpars.compare("WSS") ) {
-        Serial.print("Write System Settings");
-        PrintCR();
-      }
-      else if( tokpars.compare("RSS") ) {
-        Serial.print("Read System Settings");
-        PrintCR();
-      }
-      else if( tokpars.compare("DSS") ) {
-        Serial.print("Default System Settings");
-        PrintCR();
-      }
-      else if( tokpars.comparealt("V?") ) {
-        Serial.print("Version");
-        PrintCR();
-      }
-      else if( tokpars.comparealt("?") ) {
-        Serial.print("Help");
-        PrintCR();
-      }
-      else if( tokpars.compare("MS?") ) {
-        tokpars.advanceTail(2);
-        if( tokpars.comparealt("?") )
+        if(!tokpars.contains("?") && !tokpars.compare("BD "))
         {
-          Serial.print("Read Mode Removed");
-          PrintCR();
-        }
-        else
-        {
-          Serial.print("Write Mode Removed");
-          PrintCR();
-        }
-      }
-      else if( tokpars.compare("SV?" ) ) {
-        tokpars.advanceTail(2);
-        num1 = tokpars.to_e16();
-        Serial.print("servo ");
-        Serial.print(num1.value);
-        PrintCR();
-      }
-      else if( tokpars.compare("M?") ) {
-        tokpars.advanceTail(1);
-        if( tokpars.comparealt("?") )
-        {
-          Serial.print("Read Servo");
-          PrintCR();
-        }
-        else
-        {
+          tokpars.advanceTail(2);
           num1 = tokpars.to_e16();
-          Serial.print("Move Servo ");
+          if (num1.value==ram.board || num1.value==0)
+          {
+            active=true;
+            Serial.print("Ok");
+            PrintCR();
+          }
+          else
+          {
+            active=false;
+          }
+        }
+      }
+      if(active)
+        {
+        if( tokpars.compare("BD?",'|' ) ) {
+          Serial.print("Board ");
+          Serial.print(ram.board,DEC);
+          PrintCR();
+        }
+        else if( tokpars.compare("ID?" ) ) {
+          tokpars.advanceTail(2);
+          if(tokpars.contains("?"))
+          {
+            Serial.print("Board ");
+            Serial.print(ram.board,DEC);
+            PrintCR();            
+          }
+          else
+          {
+            num1 = tokpars.to_e16();
+            if (num1.value > 0 && num1.value < 256)
+            {
+              ram.board = num1.value;
+              Serial.print("Board ");
+              Serial.print(ram.board,DEC);
+              active=false;
+            }
+            else
+            {
+              Serial.print("Board Number Invalid");
+            }
+            PrintCR();
+          }
+        }
+        else if( tokpars.compare("BR?" ) ) {
+          tokpars.advanceTail(2);
+          num3 = tokpars.to_e32();
+          Serial.print("Bit Rate ");
           Serial.print(num1.value);
           PrintCR();
         }
-      }
-      else if( tokpars.compare("I?" ) ) {
-        tokpars.advanceTail(1);
-        num1 = tokpars.to_e16();
-        Serial.print("Relative ");
-        Serial.print(num1.value);
-        PrintCR();
-      }
-      else if( tokpars.compare("SS?" ) ) {
-        tokpars.advanceTail(2);
-        if( tokpars.compare("D" ) ) {
-          Serial.print("Default Map");
-          PrintCR();
-        }
-        else if( tokpars.compare("R" ) ) {
-          Serial.print("Copy Map to Ram");
-          PrintCR();
-        }
-        else
-        {
+        else if( tokpars.compare("WR?" ) ) {
+          tokpars.advanceTail(2);
           num1 = tokpars.to_e16();
           tokpars.nextToken();
           num2 = tokpars.to_e16();
-          Serial.print("Map ");
+          Serial.print("Write ");
           Serial.print(num2.value);
           Serial.print(" to ");
           Serial.print(num1.value);
           PrintCR();
         }
-      }
-      else if( tokpars.compare("SRS") ) {
-        Serial.print("Copy Ram to Map");
-        PrintCR();
-      }
-      else if( tokpars.compare("CSR") ) {
-        Serial.print("Copy Servo to Ram");
-        PrintCR();
-      }
-      else if( tokpars.compare("CRS") ) {
-        Serial.print("Copy Ram to Servo");
-        PrintCR();
-      }
-      else if( tokpars.compare("SPE") ) {
-        Serial.print("Servo PPM Enable");
-        PrintCR();
-      }
-      else if( tokpars.comparealt("SPE?") ) {
-        Serial.print("Read Last SPE");
-        PrintCR();
-      }
-      else if( tokpars.compare("PS?" ) ) {
-        tokpars.advanceTail(2);
-        num1 = tokpars.to_e16();
-        Serial.print("Set Pin ");
-        Serial.print(num1.value);
-        PrintCR();
-      }
-      else if( tokpars.compare("PC?" ) ) {
-        tokpars.advanceTail(2);
-        num1 = tokpars.to_e16();
-        Serial.print("Clear Pin ");
-        Serial.print(num1.value);
-        PrintCR();
-      }
-      else if( tokpars.compare("PT?" ) ) {
-        tokpars.advanceTail(2);
-        num1 = tokpars.to_e16();
-        Serial.print("Toggle Pin ");
-        Serial.print(num1.value);
-        PrintCR();
-      }
-      else if( tokpars.comparealt("RP?|" ) ) {
-        tokpars.advanceTail(3);
-        num1 = tokpars.to_e16();
-        Serial.print("Read Pin ");
-        Serial.print(num1.value);
-        PrintCR();
-      }
-      else if( tokpars.comparealt("AD?|" ) ) {
-        tokpars.advanceTail(3);
-        num1 = tokpars.to_e16();
-        Serial.print("Analog ");
-        Serial.print(num1.value);
-        PrintCR();
-      }
-
-
-
-      if( tokpars.compare("times") ) {
-        us8 i;
-        for(i=0;i<8;i++) {
-        Serial.print(intime[i]);
-        PrintCR();
+        else if( tokpars.compare("RR?" ) ) {
+          tokpars.advanceTail(2);
+          num1 = tokpars.to_e16();
+          Serial.print("Read from ");
+          Serial.print(num1.value);
+          PrintCR();
+        }
+        else if( tokpars.compare("WSS") ) {
+          Serial.print("Write System Settings");
+          PrintCR();
+        }
+        else if( tokpars.compare("RSS") ) {
+          Serial.print("Read System Settings");
+          PrintCR();
+        }
+        else if( tokpars.compare("DSS") ) {
+          Serial.print("Default System Settings");
+          PrintCR();
+        }
+        else if( tokpars.compare("V?",'|') ) {
+          Serial.print("Version");
+          PrintCR();
+        }
+        else if( tokpars.compare("?",'|') ) {
+          Serial.print("Help");
+          PrintCR();
+        }
+        else if( tokpars.compare("MS?") ) {
+          tokpars.advanceTail(2);
+          if( tokpars.compare("?",'|') )
+          {
+            Serial.print("Read Mode Removed");
+            PrintCR();
+          }
+          else
+          {
+            Serial.print("Write Mode Removed");
+            PrintCR();
+          }
+        }
+        else if( tokpars.compare("SV?" ) ) {
+          tokpars.advanceTail(2);
+          num1 = tokpars.to_e16();
+          Serial.print("servo ");
+          Serial.print(num1.value);
+          PrintCR();
+        }
+        else if( tokpars.compare("M?") ) {
+          tokpars.advanceTail(1);
+          if( tokpars.compare("?",'|') )
+          {
+            Serial.print("Read Servo");
+            PrintCR();
+          }
+          else
+          {
+            num1 = tokpars.to_e16();
+            Serial.print("Move Servo ");
+            Serial.print(num1.value);
+            PrintCR();
+          }
+        }
+        else if( tokpars.compare("I?" ) ) {
+          tokpars.advanceTail(1);
+          num1 = tokpars.to_e16();
+          Serial.print("Relative ");
+          Serial.print(num1.value);
+          PrintCR();
+        }
+        else if( tokpars.compare("SS?" ) ) {
+          tokpars.advanceTail(2);
+          if( tokpars.compare("D" ) ) {
+            Serial.print("Default Map");
+            PrintCR();
+          }
+          else if( tokpars.compare("R" ) ) {
+            Serial.print("Copy Map to Ram");
+            PrintCR();
+          }
+          else
+          {
+            num1 = tokpars.to_e16();
+            tokpars.nextToken();
+            num2 = tokpars.to_e16();
+            Serial.print("Map ");
+            Serial.print(num2.value);
+            Serial.print(" to ");
+            Serial.print(num1.value);
+            PrintCR();
+          }
+        }
+        else if( tokpars.compare("SRS") ) {
+          Serial.print("Copy Ram to Map");
+          PrintCR();
+        }
+        else if( tokpars.compare("CSR") ) {
+          Serial.print("Copy Servo to Ram");
+          PrintCR();
+        }
+        else if( tokpars.compare("CRS") ) {
+          Serial.print("Copy Ram to Servo");
+          PrintCR();
+        }
+        else if( tokpars.compare("SPE") ) {
+          Serial.print("Servo PPM Enable");
+          PrintCR();
+        }
+        else if( tokpars.compare("SPE?",'|') ) {
+          Serial.print("Read Last SPE");
+          PrintCR();
+        }
+        else if( tokpars.compare("PS?" ) ) {
+          tokpars.advanceTail(2);
+          num1 = tokpars.to_e16();
+          Serial.print("Set Pin ");
+          Serial.print(num1.value);
+          PrintCR();
+        }
+        else if( tokpars.compare("PC?" ) ) {
+          tokpars.advanceTail(2);
+          num1 = tokpars.to_e16();
+          Serial.print("Clear Pin ");
+          Serial.print(num1.value);
+          PrintCR();
+        }
+        else if( tokpars.compare("PT?" ) ) {
+          tokpars.advanceTail(2);
+          num1 = tokpars.to_e16();
+          Serial.print("Toggle Pin ");
+          Serial.print(num1.value);
+          PrintCR();
+        }
+        else if( tokpars.compare("RP?|",'|' ) ) {
+          tokpars.advanceTail(3);
+          num1 = tokpars.to_e16();
+          Serial.print("Read Pin ");
+          Serial.print(num1.value);
+          PrintCR();
+        }
+        else if( tokpars.compare("AD?|",'|' ) ) {
+          tokpars.advanceTail(3);
+          num1 = tokpars.to_e16();
+          Serial.print("Analog ");
+          Serial.print(num1.value);
+          PrintCR();
+        }
+  
+  
+  
+        if( tokpars.compare("times") ) {
+          us8 i;
+          for(i=0;i<8;i++) {
+          Serial.print(intime[i]);
+          PrintCR();
+          }
         }
       }
     }
