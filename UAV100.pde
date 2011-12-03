@@ -38,14 +38,15 @@ us32 risingtime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track risetimes
 us32 intime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //time value was high
 us32 lastused[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track last time a value was captured
 ram_struct ram;
-
 servo_t servoPos[8];//array that holds servo positions
 us8 buff[0x20];
 us8 ctr;
 us8 ch;
 volatile int state = LOW;
-us8 servo;
-us8 mapping[16];
+us8 servo = 0;
+us8 mapping[16] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
+us16 lowerlimit = 20000;
+us16 upperlimit = 40000; //soft limits for servo motion
 bool active = false;
 
 void setup()
@@ -54,7 +55,7 @@ void setup()
   for(int i = 0; i < 8; i++) {
     pinMode(servoPin[i], OUTPUT);
     digitalWrite(servoPin[i], LOW);
-    servoPos[i] = 0;
+    servoPos[i] = 30000;
   }
   Serial.begin(9600);
   pinMode(13, OUTPUT);
@@ -141,8 +142,8 @@ for(us8 i=0;i<8;i++){ //zero the values if no input for 100 ms
           if (num1.value==ram.board || num1.value==0)
           {
             active=true;
-            Serial.print("Ok");
-            PrintCR();
+//            Serial.print("OK");
+//            PrintCR();
           }
           else
           {
@@ -171,8 +172,8 @@ for(us8 i=0;i<8;i++){ //zero the values if no input for 100 ms
             if (num1.value > 0 && num1.value < 256)
             {
               ram.board = num1.value;
-              Serial.print("Board ");
-              Serial.print(ram.board,DEC);
+//              Serial.print("Board ");
+//              Serial.print(ram.board,DEC);
               active=false;
             }
             else
@@ -185,8 +186,11 @@ for(us8 i=0;i<8;i++){ //zero the values if no input for 100 ms
         else if( tokpars.compare("BR?" ) ) {
           tokpars.advanceTail(2);
           num3 = tokpars.to_e32();
+          ram.bitrate = num3.value;
           Serial.print("Bit Rate ");
-          Serial.print(num1.value);
+          Serial.print(ram.bitrate);
+          Serial.end();
+          Serial.begin(ram.bitrate);
           PrintCR();
         }
         else if( tokpars.compare("WR?" ) ) {
@@ -224,7 +228,7 @@ for(us8 i=0;i<8;i++){ //zero the values if no input for 100 ms
           PrintCR();
         }
         else if( tokpars.compare("?",'|') ) {
-          Serial.print("Help");
+          Serial.print("Visit Pontech.com for assistance.");
           PrintCR();
         }
         else if( tokpars.compare("MS?") ) {
@@ -243,23 +247,33 @@ for(us8 i=0;i<8;i++){ //zero the values if no input for 100 ms
         else if( tokpars.compare("SV?" ) ) {
           tokpars.advanceTail(2);
           num1 = tokpars.to_e16();
-          Serial.print("servo ");
-          Serial.print(num1.value);
-          PrintCR();
+          servo = (us8)num1.value;
+//          Serial.print("servo ");
+//          Serial.print(servo,DEC);
+//          PrintCR();
         }
         else if( tokpars.compare("M?") ) {
           tokpars.advanceTail(1);
-          if( tokpars.compare("?",'|') )
+          if( tokpars.compare("?|",'|') )
           {
-            Serial.print("Read Servo");
+            tokpars.advanceTail(1);
+            num1 = tokpars.to_e16();
+            Serial.print("Servo ");
+            Serial.print(num1.value,DEC);
+            Serial.print(" in pos ");
+            if (num1.value>8)
+              Serial.print(servoPos[mapping[num1.value]]/2,DEC);
+            else
+              Serial.print(servoPos[mapping[num1.value]]/2,DEC);
             PrintCR();
           }
           else
           {
             num1 = tokpars.to_e16();
-            Serial.print("Move Servo ");
-            Serial.print(num1.value);
-            PrintCR();
+            servoPos[servo] = num1.value*2 > upperlimit ? upperlimit : num1.value*2 < lowerlimit ? lowerlimit : num1.value*2;
+//            Serial.print("Move Servo ");
+//            Serial.print(servoPos[mapping[servo]],DEC);
+//            PrintCR();
           }
         }
         else if( tokpars.compare("I?" ) ) {
