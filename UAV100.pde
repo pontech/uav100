@@ -11,7 +11,8 @@ typedef struct {
     us8 board;
     us32 bitrate;
     us8 mapping[16];
-    us16 spe;
+    us16 servoPos[16];
+    packed spe;
 } ram_struct;
 // Uses one or two timers, output compare and interrupts
 // to achieve better than 14-bit resolution with 8 servos
@@ -33,12 +34,13 @@ typedef struct {
 #define SERVO_MAX    (SERVO_MIN * 2)               // 2.0 mS
 #define SERVO_CENTER ((SERVO_MIN + SERVO_MAX) / 2) // 1.5 mS
 
-byte servoPin[8] = { 4, 5, 6, 7, 8, 9, 11, 12 }; //servo pins
+us8 servoPin[8] = { 4, 5, 6, 7, 8, 9, 11, 12 }; //servo pins
+us8 servoOnOff[16] = { 1, 1, 1, 1, 1, 1, 1, 1}; //sets the servo outs to be off or on
 us32 risingtime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track risetimes
 us32 intime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //time value was high
 us32 lastused[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track last time a value was captured
 ram_struct ram;
-servo_t servoPos[8];//array that holds servo positions
+servo_t servoPos[16];//array that holds servo positions output and input
 us8 buff[0x20];
 us8 ctr;
 us8 ch;
@@ -48,16 +50,21 @@ us8 mapping[16] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
 us16 lowerlimit = 20000;
 us16 upperlimit = 40000; //soft limits for servo motion
 bool active = false;
+us8 i; //index for loops
 
 void setup()
 {
-  // Enable output pins for servos, set inital states to 'off'
-  for(int i = 0; i < 8; i++) {
+  // Enable output pins for servos, set inital states to 'middle'
+  for(int i = 0; i < 8; i++) { // todo: 2 get from memory
     pinMode(servoPin[i], OUTPUT);
     digitalWrite(servoPin[i], LOW);
     servoPos[i] = 30000;
   }
   Serial.begin(9600);
+  ram.board=1;
+
+
+
   pinMode(13, OUTPUT);
   attachInterrupt(1, RisingInterrupt, RISING);
 
@@ -100,7 +107,7 @@ void setup()
   pinMode(42, INPUT);
   pinMode(36, INPUT);
   
-  ram.board=1;
+  
 }
 
 
@@ -112,13 +119,24 @@ e32 num3;
 
 void loop()
 {
-for(us8 i=0;i<8;i++){ //zero the values if no input for 100 ms
-  us32 nowa=micros();
-  us32 last;
-  last=(nowa>lastused[i]) ? nowa-lastused[i] : (0xffffffff - lastused[i]) + nowa;
-  if (last>100000)
-   intime[i]=0;
-}
+  for(i=0;i<8;i++){
+    //zero the values if no input for 100 ms
+    us32 nowa=micros();
+    us32 last;
+    last=(nowa>lastused[i]) ? nowa-lastused[i] : (0xffffffff - lastused[i]) + nowa;
+    if (last>100000)
+      servoPos[i+8]=0;
+    //Copy input to output if mapped
+    if (mapping[i]>7)
+    {
+      //IEC0CLR = 0x10000000;   //turn intrupts off
+      //servoPos[i] = servoPos[mapping[i]] > upperlimit ? upperlimit : servoPos[mapping[i]] < lowerlimit ? lowerlimit : servoPos[mapping[i]];
+      servoPos[i]=servoPos[mapping[i]];
+      //Serial.print(servoPos[mapping[i]],DEC);
+      //PrintCR();
+      //IEC0SET = 0x10000000;   //turn intrupts on
+    }
+  }
   if (Serial.available() > 0)
   {
     ch = Serial.read();
@@ -270,27 +288,40 @@ for(us8 i=0;i<8;i++){ //zero the values if no input for 100 ms
           else
           {
             num1 = tokpars.to_e16();
-            servoPos[servo] = num1.value*2 > upperlimit ? upperlimit : num1.value*2 < lowerlimit ? lowerlimit : num1.value*2;
+            if(mapping[servo]<8)
+              servoPos[mapping[servo]] = num1.value*2 > upperlimit ? upperlimit : num1.value*2 < lowerlimit ? lowerlimit : num1.value*2;
 //            Serial.print("Move Servo ");
-//            Serial.print(servoPos[mapping[servo]],DEC);
+//            Serial.print(mapping[servo],DEC);
 //            PrintCR();
           }
         }
         else if( tokpars.compare("I?" ) ) {
           tokpars.advanceTail(1);
           num1 = tokpars.to_e16();
-          Serial.print("Relative ");
-          Serial.print(num1.value);
-          PrintCR();
+          servoPos[mapping[servo]] = num1.value*2+servoPos[mapping[servo]] > upperlimit ? upperlimit : num1.value*2+servoPos[mapping[servo]] < lowerlimit ? lowerlimit : num1.value*2+servoPos[mapping[servo]];
+//          Serial.print("Relative ");
+//          Serial.print(num1.value);
+//          PrintCR();
         }
         else if( tokpars.compare("SS?" ) ) {
           tokpars.advanceTail(2);
           if( tokpars.compare("D" ) ) {
-            Serial.print("Default Map");
-            PrintCR();
+            for(i=0;i<16;i++) {
+              mapping[i] = i;
+            }
+//            Serial.print("Default Map");
+//            PrintCR();
           }
           else if( tokpars.compare("R" ) ) {
-            Serial.print("Copy Map to Ram");
+            memcpy(ram.mapping,mapping,sizeof(mapping));
+//            Serial.print("Copy Map to Ram");
+//            PrintCR();
+          }
+          else if( tokpars.compare("M" ) ) {
+            for(i=0;i<16;i++) {
+              Serial.print(mapping[i],DEC);
+              Serial.print(" ");
+            }
             PrintCR();
           }
           else
@@ -298,75 +329,110 @@ for(us8 i=0;i<8;i++){ //zero the values if no input for 100 ms
             num1 = tokpars.to_e16();
             tokpars.nextToken();
             num2 = tokpars.to_e16();
-            Serial.print("Map ");
-            Serial.print(num2.value);
-            Serial.print(" to ");
-            Serial.print(num1.value);
-            PrintCR();
+            mapping[num2.value]=num1.value;
+//            Serial.print("Map ");
+//            Serial.print(num2.value);
+//            Serial.print(" to ");
+//            Serial.print(num1.value);
+//            PrintCR();
           }
         }
         else if( tokpars.compare("SRS") ) {
-          Serial.print("Copy Ram to Map");
-          PrintCR();
+          memcpy(mapping,ram.mapping,sizeof(mapping));
+//          Serial.print("Copy Ram to Map");
+//          PrintCR();
         }
         else if( tokpars.compare("CSR") ) {
-          Serial.print("Copy Servo to Ram");
-          PrintCR();
+          memcpy(ram.servoPos,servoPos,sizeof(servoPos));
+//          Serial.print("Copy Servo to Ram");
+//          PrintCR();
         }
         else if( tokpars.compare("CRS") ) {
-          Serial.print("Copy Ram to Servo");
-          PrintCR();
+          memcpy(servoPos,ram.servoPos,sizeof(servoPos));
+//          Serial.print("Copy Ram to Servo");
+//          PrintCR();
         }
-        else if( tokpars.compare("SPE") ) {
-          Serial.print("Servo PPM Enable");
-          PrintCR();
-        }
-        else if( tokpars.compare("SPE?",'|') ) {
-          Serial.print("Read Last SPE");
-          PrintCR();
+        else if( tokpars.compare("SPE?") ) {
+          tokpars.advanceTail(3);
+          if( tokpars.compare("?",'|') ) {
+            Serial.print("SPE 0x");
+            Serial.print(ram.spe.i,HEX); 
+            PrintCR();
+          }
+          else
+          {
+            num3 = tokpars.to_e32();
+            ram.spe.i = num3.value;
+            us16 mask = 1;
+            for(i=0;i<8;i++) {
+              servoOnOff[i] = (ram.spe.i & mask) > 0 ? 1 : 0;
+              mask = mask<<1;
+            }
+//            Serial.print("Servo PPM Enable ");
+//            Serial.print(ram.spe,DEC);
+//            PrintCR();
+          }
         }
         else if( tokpars.compare("PS?" ) ) {
           tokpars.advanceTail(2);
           num1 = tokpars.to_e16();
-          Serial.print("Set Pin ");
-          Serial.print(num1.value);
-          PrintCR();
+          if(num1.value >=0 && num1.value <8)
+            digitalWrite(servoPin[num1.value], HIGH);
+//          Serial.print("Set Pin ");
+//          Serial.print(num1.value);
+//          PrintCR();
         }
         else if( tokpars.compare("PC?" ) ) {
           tokpars.advanceTail(2);
           num1 = tokpars.to_e16();
-          Serial.print("Clear Pin ");
-          Serial.print(num1.value);
-          PrintCR();
+          if(num1.value >=0 && num1.value <8)
+            digitalWrite(servoPin[num1.value], LOW);
+//          Serial.print("Clear Pin ");
+//          Serial.print(num1.value);
+//          PrintCR();
         }
         else if( tokpars.compare("PT?" ) ) {
           tokpars.advanceTail(2);
           num1 = tokpars.to_e16();
-          Serial.print("Toggle Pin ");
-          Serial.print(num1.value);
-          PrintCR();
+          if(num1.value >=0 && num1.value <8)
+            digitalWrite(servoPin[num1.value], !digitalRead(servoPin[num1.value]));
+//          Serial.print("Toggle Pin ");
+//          Serial.print(num1.value);
+//          PrintCR();
         }
         else if( tokpars.compare("RP?|",'|' ) ) {
           tokpars.advanceTail(3);
           num1 = tokpars.to_e16();
-          Serial.print("Read Pin ");
-          Serial.print(num1.value);
-          PrintCR();
+          if(num1.value >7 && num1.value <16) {
+            Serial.print(digitalRead(servoPin[num1.value]),DEC);
+//            Serial.print("Read Pin ");
+//            Serial.print(num1.value);
+            PrintCR();
+          }
         }
         else if( tokpars.compare("AD?|",'|' ) ) {
           tokpars.advanceTail(3);
           num1 = tokpars.to_e16();
+          
           Serial.print("Analog ");
-          Serial.print(num1.value);
+          Serial.print(analogRead(A9));
           PrintCR();
+        }
+        else if( tokpars.compare("SLU?") ) {
+          tokpars.advanceTail(3);
+          num1 = tokpars.to_e16();
+          upperlimit = num1.value*2;
+        }
+        else if( tokpars.compare("SLL?") ) {
+          tokpars.advanceTail(3);
+          num1 = tokpars.to_e16();
+          lowerlimit = num1.value*2;
         }
   
   
-  
         if( tokpars.compare("times") ) {
-          us8 i;
-          for(i=0;i<8;i++) {
-          Serial.print(intime[i]);
+          for(i=0;i<16;i++) {
+          Serial.print(servoPos[i],DEC);
           PrintCR();
           }
         }
@@ -419,7 +485,7 @@ static volatile byte servoNum = 0;  // Cycles through servos
 void __ISR(_TIMER_3_VECTOR,ipl3) pwmOn(void)
 {
   mT3ClearIntFlag();  // Clear interrupt flag
-  if(servoPos[servoNum] > 0) {
+  if(servoPos[servoNum] > 0 && servoOnOff[servoNum] == 1 ) {
     digitalWrite(servoPin[servoNum], HIGH);
     SetDCOC1PWM(servoPos[servoNum]);
   }
@@ -432,86 +498,87 @@ void __ISR(_TIMER_3_VECTOR,ipl3) pwmOn(void)
 void __ISR(_OUTPUT_COMPARE_1_VECTOR,ipl3) pwmOff(void)
 {
   mOC1ClearIntFlag();
-  digitalWrite(servoPin[servoNum], LOW);
+  if(servoOnOff[servoNum] == 1 ) 
+    digitalWrite(servoPin[servoNum], LOW);
   if(++servoNum > 7) servoNum = 0;  // Back to start
 }
 
 void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
 {
-  bool temp = digitalRead(43);
-  digitalWrite(43, temp ^ 1);
+//  bool temp = digitalRead(43);
+//  digitalWrite(43, temp ^ 1);
   
-us16 static lastb;
-us16 static lastd;
-us32 now;
-now = micros();
-if ((PORTB & 0x01) != (lastb & 0x01)) //cn2
- {
- lastused[0]=now;
- if (PORTB & 0x01) 
-  risingtime[0]=now;
- else
-  intime[0]=(now>risingtime[0]) ? now-risingtime[0] : (0xffffffff - risingtime[0]) + now;
- }
- if ((PORTB & 0x02) != (lastb & 0x02)) //cn3
- {
- lastused[1]=now;
- if (PORTB & 0x02)
- risingtime[1]=now;
- else
-  intime[1]=(now>risingtime[1]) ? now-risingtime[1] : (0xffffffff - risingtime[1]) + now;
- }
- if ((PORTB & 0x04) != (lastb & 0x04)) //cn4
- {
- lastused[2]=now;
- if (PORTB & 0x04) //cn4
-  risingtime[2]=now;
- else
-  intime[2]=(now>risingtime[2]) ? now-risingtime[2] : (0xffffffff - risingtime[2]) + now;
- }
- if ((PORTB & 0x08) != (lastb & 0x08)) //cn5
- {
- lastused[3]=now;
- if (PORTB & 0x08)
-  risingtime[3]=now;
- else
-  intime[3]=(now>risingtime[3]) ? now-risingtime[3] : (0xffffffff - risingtime[3]) + now;
- }
- if ((PORTB & 0x10) != (lastb & 0x10)) //cn6
- {
-  lastused[4]=now;
-  if (PORTB & 0x10)
-   risingtime[4]=now;
-  else
-   intime[4]=(now>risingtime[4]) ? now-risingtime[4] : (0xffffffff - risingtime[4]) + now;
- }
- if ((PORTB & 0x20) != (lastb & 0x20)) //cn7
+  us16 static lastb;
+  us16 static lastd;
+  us32 now;
+  now = micros();
+  if ((PORTB & 0x01) != (lastb & 0x01)) //cn2
   {
-  lastused[5]=now;
-  if (PORTB & 0x20) 
-   risingtime[5]=now;
-  else
-   intime[5]=(now>risingtime[5]) ? now-risingtime[5] : (0xffffffff - risingtime[5]) + now;
+    lastused[0]=now;
+    if (PORTB & 0x01) 
+      risingtime[0]=now;
+    else if(ram.spe.b.b8)
+      servoPos[8]=((now>risingtime[0]) ? now-risingtime[0] : (0xffffffff - risingtime[0]) + now)*20;
   }
- if ((PORTB & 0x8000) != (lastb & 0x8000)) //cn12
+  if ((PORTB & 0x02) != (lastb & 0x02)) //cn3
   {
- lastused[6]=now;
-  if (PORTB & 0x8000)
-   risingtime[6]=now;
-  else
-   intime[6]=(now>risingtime[6]) ? now-risingtime[6] : (0xffffffff - risingtime[6]) + now;
+    lastused[1]=now;
+    if (PORTB & 0x02)
+      risingtime[1]=now;
+    else if(ram.spe.b.b9)
+      servoPos[9]=((now>risingtime[1]) ? now-risingtime[1] : (0xffffffff - risingtime[1]) + now)*20;
+  }
+  if ((PORTB & 0x04) != (lastb & 0x04)) //cn4
+  {
+    lastused[2]=now;
+    if (PORTB & 0x04) //cn4
+      risingtime[2]=now;
+    else if(ram.spe.b.b10)
+      servoPos[10]=((now>risingtime[2]) ? now-risingtime[2] : (0xffffffff - risingtime[2]) + now)*20;
+  }
+  if ((PORTB & 0x08) != (lastb & 0x08)) //cn5
+  {
+    lastused[3]=now;
+    if (PORTB & 0x08)
+      risingtime[3]=now;
+    else if(ram.spe.b.b11)
+      servoPos[11]=((now>risingtime[3]) ? now-risingtime[3] : (0xffffffff - risingtime[3]) + now)*20;
+  }
+  if ((PORTB & 0x10) != (lastb & 0x10)) //cn6
+  {
+    lastused[4]=now;
+    if (PORTB & 0x10)
+      risingtime[4]=now;
+    else  if(ram.spe.b.b12)
+      servoPos[12]=((now>risingtime[4]) ? now-risingtime[4] : (0xffffffff - risingtime[4]) + now)*20;
+  }
+  if ((PORTB & 0x20) != (lastb & 0x20)) //cn7
+  {
+    lastused[5]=now;
+    if (PORTB & 0x20) 
+      risingtime[5]=now;
+    else if(ram.spe.b.b13)
+      servoPos[13]=((now>risingtime[5]) ? now-risingtime[5] : (0xffffffff - risingtime[5]) + now)*20;
+  }
+  if ((PORTB & 0x8000) != (lastb & 0x8000)) //cn12
+  {
+    lastused[6]=now;
+    if (PORTB & 0x8000)
+      risingtime[6]=now;
+    else if(ram.spe.b.b14)
+      servoPos[14]=((now>risingtime[6]) ? now-risingtime[6] : (0xffffffff - risingtime[6]) + now)*20;
   }
  if ((PORTD & 0x40) != (lastd & 0x40)) //cn15
   {
-  lastused[7]=now;
-  if (PORTD & 0x40)
-   risingtime[7]=now;
-  else
-   intime[7]=(now>risingtime[7]) ? now-risingtime[7] : (0xffffffff - risingtime[7]) + now;
+    lastused[7]=now;
+    if (PORTD & 0x40)
+      risingtime[7]=now;
+    else if(ram.spe.b.b15)
+      servoPos[15]=((now>risingtime[7]) ? now-risingtime[7] : (0xffffffff - risingtime[7]) + now)*20;
   }
- lastb = PORTB; // Read PORTB to clear mismatch condition
- lastd = PORTD; // Read PORTD to clear mismatch condition
- IFS1CLR = 0x0001; // Be sure to clear the CN interrupt status
+  lastb = PORTB; // Read PORTB to clear mismatch condition
+  lastd = PORTD; // Read PORTD to clear mismatch condition
+  IFS1CLR = 0x0001; // Be sure to clear the CN interrupt status
                   // flag before exiting the service routine.
 }
 
