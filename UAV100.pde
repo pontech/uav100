@@ -1,18 +1,22 @@
 #include <core.h>
 #include <TokenParser.h>
+#include <EEPROM.h>
 #define WantNewLine // todo: 2 comment out before finalized
 #define s8 signed char
-#define s16 signed int
+#define s16 signed short int
 #define s32 signed long
 #define us8 unsigned char
-#define us16 unsigned int
+#define us16 unsigned short int
 #define us32 long unsigned
 typedef struct {
-    us8 board;
-    us32 bitrate;
-    us8 mapping[16];
-    us16 servoPos[16];
-    packed spe;
+  us32 bitrate;
+  us8 mapping[16];
+  us16 servoPos[16];
+  packed spe;
+  us16 lowerlimit;
+  us16 upperlimit;
+  us8 board;
+  us8 structend;
 } ram_struct;
 // Uses one or two timers, output compare and interrupts
 // to achieve better than 14-bit resolution with 8 servos
@@ -47,8 +51,6 @@ us8 ch;
 volatile int state = LOW;
 us8 servo = 0;
 us8 mapping[16] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
-us16 lowerlimit = 20000;
-us16 upperlimit = 40000; //soft limits for servo motion
 bool active = false;
 us8 i; //index for loops
 
@@ -130,7 +132,7 @@ void loop()
     if (mapping[i]>7)
     {
       //IEC0CLR = 0x10000000;   //turn intrupts off
-      //servoPos[i] = servoPos[mapping[i]] > upperlimit ? upperlimit : servoPos[mapping[i]] < lowerlimit ? lowerlimit : servoPos[mapping[i]];
+      //servoPos[i] = servoPos[mapping[i]] > ram.upperlimit ? ram.upperlimit : servoPos[mapping[i]] < ram.lowerlimit ? ram.lowerlimit : servoPos[mapping[i]];
       servoPos[i]=servoPos[mapping[i]];
       //Serial.print(servoPos[mapping[i]],DEC);
       //PrintCR();
@@ -215,34 +217,37 @@ void loop()
           tokpars.advanceTail(2);
           num1 = tokpars.to_e16();
           tokpars.nextToken();
-          num2 = tokpars.to_e16();
-          Serial.print("Write ");
-          Serial.print(num2.value);
-          Serial.print(" to ");
-          Serial.print(num1.value);
-          PrintCR();
+          num3 = tokpars.to_e32();
+          EEPROM.write(num1.value, num3.value);
+//          Serial.print("Write ");
+//          Serial.print(num2.value);
+//          Serial.print(" to ");
+//          Serial.print(num1.value);
+//          PrintCR();
         }
         else if( tokpars.compare("RR?" ) ) {
           tokpars.advanceTail(2);
-          num1 = tokpars.to_e16();
-          Serial.print("Read from ");
-          Serial.print(num1.value);
+          num3 = tokpars.to_e32();
+          Serial.print(EEPROM.read(num3.value),DEC);
+//          Serial.print(num3.value,DEC);
           PrintCR();
         }
         else if( tokpars.compare("WSS") ) {
-          Serial.print("Write System Settings");
-          PrintCR();
+          eeprom_in((us32*)&ram,0,sizeof(ram));
+//          Serial.print("Write System Settings");
+//          PrintCR();
         }
         else if( tokpars.compare("RSS") ) {
-          Serial.print("Read System Settings");
-          PrintCR();
+          eeprom_out(0,(us32*)&ram,sizeof(ram));
+//          Serial.print("Read System Settings");
+//          PrintCR();
         }
         else if( tokpars.compare("DSS") ) {
           Serial.print("Default System Settings");
           PrintCR();
         }
         else if( tokpars.compare("V?",'|') ) {
-          Serial.print("Version");
+          Serial.print("Version 1.0");
           PrintCR();
         }
         else if( tokpars.compare("?",'|') ) {
@@ -289,7 +294,7 @@ void loop()
           {
             num1 = tokpars.to_e16();
             if(mapping[servo]<8)
-              servoPos[mapping[servo]] = num1.value*2 > upperlimit ? upperlimit : num1.value*2 < lowerlimit ? lowerlimit : num1.value*2;
+              servoPos[mapping[servo]] = num1.value*2 > ram.upperlimit ? ram.upperlimit : num1.value*2 < ram.lowerlimit ? ram.lowerlimit : num1.value*2;
 //            Serial.print("Move Servo ");
 //            Serial.print(mapping[servo],DEC);
 //            PrintCR();
@@ -298,7 +303,7 @@ void loop()
         else if( tokpars.compare("I?" ) ) {
           tokpars.advanceTail(1);
           num1 = tokpars.to_e16();
-          servoPos[mapping[servo]] = num1.value*2+servoPos[mapping[servo]] > upperlimit ? upperlimit : num1.value*2+servoPos[mapping[servo]] < lowerlimit ? lowerlimit : num1.value*2+servoPos[mapping[servo]];
+          servoPos[mapping[servo]] = num1.value*2+servoPos[mapping[servo]] > ram.upperlimit ? ram.upperlimit : num1.value*2+servoPos[mapping[servo]] < ram.lowerlimit ? ram.lowerlimit : num1.value*2+servoPos[mapping[servo]];
 //          Serial.print("Relative ");
 //          Serial.print(num1.value);
 //          PrintCR();
@@ -421,14 +426,34 @@ void loop()
         else if( tokpars.compare("SLU?") ) {
           tokpars.advanceTail(3);
           num1 = tokpars.to_e16();
-          upperlimit = num1.value*2;
+          ram.upperlimit = num1.value*2;
         }
         else if( tokpars.compare("SLL?") ) {
           tokpars.advanceTail(3);
           num1 = tokpars.to_e16();
-          lowerlimit = num1.value*2;
+          ram.lowerlimit = num1.value*2;
         }
-  
+/*        else if( tokpars.compare("size") ) {
+          Serial.print(sizeof(ram.board),DEC);
+          PrintCR();
+          Serial.print(sizeof(ram.bitrate),DEC);
+          PrintCR();
+          Serial.print(sizeof(ram.mapping),DEC);
+          PrintCR();
+          Serial.print(sizeof(ram.servoPos),DEC);
+          PrintCR();
+          Serial.print(sizeof(packed_int),DEC);
+          PrintCR();
+          Serial.print(sizeof(ram.lowerlimit),DEC);
+          PrintCR();
+          Serial.print(sizeof(ram.upperlimit),DEC);
+          PrintCR();
+          Serial.print(sizeof(ram.structend),DEC);
+          PrintCR();
+          Serial.print(sizeof(ram_struct),DEC);
+          PrintCR();
+        }
+*/  
   
         if( tokpars.compare("times") ) {
           for(i=0;i<16;i++) {
@@ -452,12 +477,36 @@ void loop()
   delay(20);  // No point updating faster than servo pulses
 */}
 void PrintCR() {
-#ifdef WantNewLine
-Serial.println("");
-#else
-Serial.print("\r");
-#endif
+  #ifdef WantNewLine
+  Serial.println("");
+  #else
+  Serial.print("\r");
+  #endif
 }
+
+void eeprom_in(us32* Data,us16 eeprom_adress,us16 bytes) {
+  int i;
+  for(i=0;i<bytes/4;i++){
+    EEPROM.write(eeprom_adress++, *Data++);
+  }
+}
+void eeprom_out(us16 eeprom_adress,us32* Data,us16 bytes) {
+  int i;
+  for(i=0;i<bytes/4;i++){
+    *(Data++) = EEPROM.read(eeprom_adress++);
+  }
+}
+
+
+/*  us8 board;
+  us32 bitrate;
+  us8 mapping[16];
+  us16 servoPos[16];
+  packed spe;
+  us16 lowerlimit;
+  us16 upperlimit;
+  us8 structend;
+*/
 
 void RisingInterrupt()
 {
