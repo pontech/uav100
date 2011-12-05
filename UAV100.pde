@@ -38,7 +38,7 @@ typedef struct {
 #define SERVO_MAX    (SERVO_MIN * 2)               // 2.0 mS
 #define SERVO_CENTER ((SERVO_MIN + SERVO_MAX) / 2) // 1.5 mS
 
-us8 servoPin[8] = { 26, 27, 28, 29, 30, 31, 32, 33 ,42,41,14,20,15,21,25,36}; //servo out pins
+us8 servoPin[16] = { 26, 27, 28, 29, 30, 31, 32, 33 ,42,41,14,20,15,21,25,36}; //servo out pins
 us8 servoOnOff[16] = { 1, 1, 1, 1, 1, 1, 1, 1}; //sets the servo outs to be off or on
 us32 risingtime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track risetimes
 us32 intime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //time value was high
