@@ -6,7 +6,7 @@
 #define s16 signed short int
 #define s32 signed long
 #define us8 unsigned char
-#define us16 unsigned short int
+#define us16 unsigned short int//unsigned short int
 #define us32 long unsigned
 typedef struct {
   us32 bitrate;
@@ -38,7 +38,7 @@ typedef struct {
 #define SERVO_MAX    (SERVO_MIN * 2)               // 2.0 mS
 #define SERVO_CENTER ((SERVO_MIN + SERVO_MAX) / 2) // 1.5 mS
 
-us8 servoPin[8] = { 4, 5, 6, 7, 8, 9, 11, 12 }; //servo pins
+us8 servoPin[8] = { 26, 27, 28, 29, 30, 31, 32, 33 ,42,41,14,20,15,21,25,36}; //servo out pins
 us8 servoOnOff[16] = { 1, 1, 1, 1, 1, 1, 1, 1}; //sets the servo outs to be off or on
 us32 risingtime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track risetimes
 us32 intime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //time value was high
@@ -53,6 +53,7 @@ us8 servo = 0;
 us8 mapping[16] ;//= {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
 bool active = false;
 us8 i; //index for loops
+us8 last15 = 0; //track last value of servo 15
 
 void setup()
 {
@@ -116,6 +117,8 @@ void setup()
   pinMode(41, INPUT);
   pinMode(42, INPUT);
   pinMode(36, INPUT);
+//  pinMode(26, OUTPUT);
+
 }
 
 e16 num1;//temporary values to parse into
@@ -124,6 +127,7 @@ e32 num3;
 
 void loop()
 {
+//  digitalWrite(26, !digitalRead(26));
   for(i=0;i<8;i++){
     //zero the values if no input for 100 ms
     us32 nowa=micros();
@@ -132,14 +136,24 @@ void loop()
     if (last>100000)
       servoPos[i+8]=0;
     //Copy input to output if mapped
-    if (mapping[i]>7)
+/*    if (mapping[i]>7)
     {
       //IEC0CLR = 0x10000000;   //turn intrupts off
-      //servoPos[i] = servoPos[mapping[i]] > ram.upperlimit ? ram.upperlimit : servoPos[mapping[i]] < ram.lowerlimit ? ram.lowerlimit : servoPos[mapping[i]];
-      servoPos[i]=servoPos[mapping[i]]; // todo: 3 fix softlimits
+      servoPos[i] = servoPos[mapping[i]] > ram.upperlimit ? ram.upperlimit : servoPos[mapping[i]] < ram.lowerlimit ? ram.lowerlimit : servoPos[mapping[i]];
+      //servoPos[i]=servoPos[mapping[i]]; // todo: 3 fix softlimits
       //Serial.print(servoPos[mapping[i]],DEC);
       //PrintCR();
       //IEC0SET = 0x10000000;   //turn intrupts on
+    }
+*/
+  }
+  if (digitalRead(servoPin[15]) != last15) {
+    last15 = digitalRead(servoPin[15]);
+    if (last15) {
+      SSD();
+    }
+    else {
+      SRS();
     }
   }
   if (Serial.available() > 0)
@@ -271,7 +285,15 @@ void loop()
 //          PrintCR();
         }
         else if( tokpars.compare("V?",'|') ) {
-          Serial.print("Version 1.0");
+          Serial.print("Version 0.1 2011.12.04.20.08");
+/*#if defined (_BOARD_MEGA_)
+          Serial.print("pins_arduino_pic32_mega.cxx");
+#elif defined (_BOARD_UNO_)
+	          Serial.print("pins_arduino_pic32_uno.cxx");
+#else
+	          Serial.print("pins_arduino_pic32_default.cxx");
+#endif
+*/
           PrintCR();
         }
         else if( tokpars.compare("?",'|') ) {
@@ -317,8 +339,8 @@ void loop()
           else
           {
             num1 = tokpars.to_e16();
-            if(mapping[servo]<8)
-              servoPos[mapping[servo]] = num1.value*2 > ram.upperlimit ? ram.upperlimit : num1.value*2 < ram.lowerlimit ? ram.lowerlimit : num1.value*2;
+            if(servo<8)
+              servoPos[servo] = num1.value*2 > ram.upperlimit ? ram.upperlimit : num1.value*2 < ram.lowerlimit ? ram.lowerlimit : num1.value*2;
 //            Serial.print("Move Servo ");
 //            Serial.print(mapping[servo],DEC);
 //            PrintCR();
@@ -327,7 +349,7 @@ void loop()
         else if( tokpars.compare("I?" ) ) {
           tokpars.advanceTail(1);
           num1 = tokpars.to_e16();
-          servoPos[mapping[servo]] = num1.value*2+servoPos[mapping[servo]] > ram.upperlimit ? ram.upperlimit : num1.value*2+servoPos[mapping[servo]] < ram.lowerlimit ? ram.lowerlimit : num1.value*2+servoPos[mapping[servo]];
+          servoPos[servo] = num1.value*2 + servoPos[servo] > ram.upperlimit ? ram.upperlimit : num1.value*2 + servoPos[servo] < ram.lowerlimit ? ram.lowerlimit : num1.value*2+servoPos[servo];
 //          Serial.print("Relative ");
 //          Serial.print(num1.value);
 //          PrintCR();
@@ -335,9 +357,7 @@ void loop()
         else if( tokpars.compare("SS?" ) ) {
           tokpars.advanceTail(2);
           if( tokpars.compare("D" ) ) {
-            for(i=0;i<16;i++) {
-              mapping[i] = i;
-            }
+            SSD();
 //            Serial.print("Default Map");
 //            PrintCR();
           }
@@ -367,7 +387,7 @@ void loop()
           }
         }
         else if( tokpars.compare("SRS") ) {
-          memcpy(mapping,ram.mapping,sizeof(mapping));
+          SRS();
 //          Serial.print("Copy Ram to Map");
 //          PrintCR();
         }
@@ -433,7 +453,7 @@ void loop()
           tokpars.advanceTail(3);
           num1 = tokpars.to_e16();
           if(num1.value >7 && num1.value <16) {
-            Serial.print(digitalRead(servoPin[num1.value]),DEC);
+            Serial.print(!digitalRead(servoPin[num1.value]),DEC);
 //            Serial.print("Read Pin ");
 //            Serial.print(num1.value);
             PrintCR();
@@ -479,7 +499,7 @@ void loop()
         }
 */  
   
-        if( tokpars.compare("times") ) {
+        if( tokpars.compare("TIMES") ) {
           for(i=0;i<16;i++) {
           Serial.print(servoPos[i],DEC);
           PrintCR();
@@ -509,10 +529,18 @@ void eeprom_out(us16 eeprom_adress,us32* Data,us16 bytes) {
     *(Data++) = EEPROM.read(eeprom_adress++);
   }
 }
+void SRS() {
+  memcpy(mapping,ram.mapping,sizeof(mapping));
+}
+void SSD() {
+  for(i=0;i<16;i++) {
+    mapping[i] = i;
+  }
+}
 void set_default_ram() {
   ram.board = 1;
   ram.bitrate = 9600;//115200
-  ram.spe.i = 0xffff;
+  ram.spe.i = 0x7fff;
   ram.lowerlimit = 20000;
   ram.upperlimit = 40000;
   ram.structend = 42;
@@ -552,9 +580,9 @@ static volatile byte servoNum = 0;  // Cycles through servos
 void __ISR(_TIMER_3_VECTOR,ipl3) pwmOn(void)
 {
   mT3ClearIntFlag();  // Clear interrupt flag
-  if(servoPos[servoNum] > 0 && servoOnOff[servoNum] == 1 ) {
+  if(servoPos[mapping[servoNum]] > 0 && servoOnOff[servoNum] == 1 ) {
     digitalWrite(servoPin[servoNum], HIGH);
-    SetDCOC1PWM(servoPos[servoNum]);
+    SetDCOC1PWM(servoPos[mapping[servoNum]]);
   }
 }
 
@@ -577,74 +605,76 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
   
   us16 static lastb;
   us16 static lastd;
+  us16 thisb = PORTB;
+  us16 thisd = PORTD;
   us32 now;
   now = micros();
-  if ((PORTB & 0x01) != (lastb & 0x01)) //cn2
+  if ((thisb ^ lastb) & 0x01)  //cn2
   {
     lastused[0]=now;
-    if (PORTB & 0x01) 
+    if (!(thisb & 0x01))
       risingtime[0]=now;
     else if(ram.spe.b.b8)
       servoPos[8]=((now>risingtime[0]) ? now-risingtime[0] : (0xffffffff - risingtime[0]) + now)*20;
   }
-  if ((PORTB & 0x02) != (lastb & 0x02)) //cn3
+  if ((thisb ^ lastb) & 0x02) //cn3
   {
     lastused[1]=now;
-    if (PORTB & 0x02)
+    if (!(thisb & 0x02))
       risingtime[1]=now;
     else if(ram.spe.b.b9)
       servoPos[9]=((now>risingtime[1]) ? now-risingtime[1] : (0xffffffff - risingtime[1]) + now)*20;
   }
-  if ((PORTB & 0x04) != (lastb & 0x04)) //cn4
+  if ((thisb ^ lastb) & 0x04) //cn4
   {
     lastused[2]=now;
-    if (PORTB & 0x04) //cn4
+    if (!(thisb & 0x04)) //cn4
       risingtime[2]=now;
     else if(ram.spe.b.b10)
       servoPos[10]=((now>risingtime[2]) ? now-risingtime[2] : (0xffffffff - risingtime[2]) + now)*20;
   }
-  if ((PORTB & 0x08) != (lastb & 0x08)) //cn5
+  if ((thisb ^ lastb) & 0x08) //cn5
   {
     lastused[3]=now;
-    if (PORTB & 0x08)
+    if (!(thisb & 0x08))
       risingtime[3]=now;
     else if(ram.spe.b.b11)
       servoPos[11]=((now>risingtime[3]) ? now-risingtime[3] : (0xffffffff - risingtime[3]) + now)*20;
   }
-  if ((PORTB & 0x10) != (lastb & 0x10)) //cn6
+  if ((thisb ^ lastb) & 0x10) //cn6
   {
     lastused[4]=now;
-    if (PORTB & 0x10)
+    if (!(thisb & 0x10))
       risingtime[4]=now;
     else  if(ram.spe.b.b12)
       servoPos[12]=((now>risingtime[4]) ? now-risingtime[4] : (0xffffffff - risingtime[4]) + now)*20;
   }
-  if ((PORTB & 0x20) != (lastb & 0x20)) //cn7
+  if ((thisb ^ lastb) & 0x20) //cn7
   {
     lastused[5]=now;
-    if (PORTB & 0x20) 
+    if (!(thisb & 0x20))
       risingtime[5]=now;
     else if(ram.spe.b.b13)
       servoPos[13]=((now>risingtime[5]) ? now-risingtime[5] : (0xffffffff - risingtime[5]) + now)*20;
   }
-  if ((PORTB & 0x8000) != (lastb & 0x8000)) //cn12
+  if ((thisb ^ lastb) & 0x8000) //cn12
   {
     lastused[6]=now;
-    if (PORTB & 0x8000)
+    if (!(thisb & 0x8000))
       risingtime[6]=now;
     else if(ram.spe.b.b14)
       servoPos[14]=((now>risingtime[6]) ? now-risingtime[6] : (0xffffffff - risingtime[6]) + now)*20;
   }
- if ((PORTD & 0x40) != (lastd & 0x40)) //cn15
+ if ((thisd ^ lastd) & 0x40) //cn15
   {
     lastused[7]=now;
-    if (PORTD & 0x40)
+    if (!(thisd & 0x40))
       risingtime[7]=now;
     else if(ram.spe.b.b15)
       servoPos[15]=((now>risingtime[7]) ? now-risingtime[7] : (0xffffffff - risingtime[7]) + now)*20;
   }
-  lastb = PORTB; // Read PORTB to clear mismatch condition
-  lastd = PORTD; // Read PORTD to clear mismatch condition
+  lastb = thisb; // Read PORTB to clear mismatch condition
+  lastd = thisd; // Read PORTD to clear mismatch condition
   IFS1CLR = 0x0001; // Be sure to clear the CN interrupt status
                   // flag before exiting the service routine.
 }
