@@ -48,27 +48,35 @@ servo_t servoPos[16];//array that holds servo positions output and input
 us8 buff[0x20];
 us8 ctr;
 us8 ch;
-volatile int state = LOW;
+//volatile int state = LOW;
 us8 servo = 0;
-us8 mapping[16] = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
+us8 mapping[16] ;//= {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
 bool active = false;
 us8 i; //index for loops
 
 void setup()
 {
-  // Enable output pins for servos, set inital states to 'middle'
-  for(int i = 0; i < 8; i++) { // todo: 2 get from memory
+  eeprom_out(0,(us32*)&ram,sizeof(ram)); //get structure from memory
+  if (ram.structend != 42)
+    set_default_ram();
+  // Enable output pins for servos
+  for(int i = 0; i < 8; i++) {
     pinMode(servoPin[i], OUTPUT);
     digitalWrite(servoPin[i], LOW);
-    servoPos[i] = 30000;
   }
-  Serial.begin(9600);
-  ram.board=1;
+  us16 mask = 1;
+  for(i=0;i<8;i++) {
+    servoOnOff[i] = (ram.spe.i & mask) > 0 ? 1 : 0;
+    mask = mask<<1;
+  }
+  memcpy(servoPos,ram.servoPos,sizeof(servoPos));
+  memcpy(mapping,ram.mapping,sizeof(mapping));
+  Serial.begin(ram.bitrate);
 
-
+  //ram.board=1;// todo: 1 get from memory
 
   pinMode(13, OUTPUT);
-  attachInterrupt(1, RisingInterrupt, RISING);
+//  attachInterrupt(1, RisingInterrupt, RISING);
 
   // Initialize timer to 400 Hz (50 Hz * 8 servos)
 #ifdef EXTRA_RES
@@ -108,16 +116,11 @@ void setup()
   pinMode(41, INPUT);
   pinMode(42, INPUT);
   pinMode(36, INPUT);
-  
-  
 }
 
-
-float x = 0.0;  // Used only for motion demo below; not servo driver
-e16 num1;
+e16 num1;//temporary values to parse into
 e16 num2;
 e32 num3;
-
 
 void loop()
 {
@@ -133,7 +136,7 @@ void loop()
     {
       //IEC0CLR = 0x10000000;   //turn intrupts off
       //servoPos[i] = servoPos[mapping[i]] > ram.upperlimit ? ram.upperlimit : servoPos[mapping[i]] < ram.lowerlimit ? ram.lowerlimit : servoPos[mapping[i]];
-      servoPos[i]=servoPos[mapping[i]];
+      servoPos[i]=servoPos[mapping[i]]; // todo: 3 fix softlimits
       //Serial.print(servoPos[mapping[i]],DEC);
       //PrintCR();
       //IEC0SET = 0x10000000;   //turn intrupts on
@@ -239,12 +242,33 @@ void loop()
         }
         else if( tokpars.compare("RSS") ) {
           eeprom_out(0,(us32*)&ram,sizeof(ram));
+          Serial.end();
+          Serial.begin(ram.bitrate);
+          active=false;
+          us16 mask = 1;
+          for(i=0;i<8;i++) {
+            servoOnOff[i] = (ram.spe.i & mask) > 0 ? 1 : 0;
+            mask = mask<<1;
+          }
+          memcpy(servoPos,ram.servoPos,sizeof(servoPos));
+          memcpy(mapping,ram.mapping,sizeof(mapping));
 //          Serial.print("Read System Settings");
 //          PrintCR();
         }
         else if( tokpars.compare("DSS") ) {
-          Serial.print("Default System Settings");
-          PrintCR();
+          set_default_ram();
+          Serial.end();
+          Serial.begin(ram.bitrate);
+          active=false;
+          us16 mask = 1;
+          for(i=0;i<8;i++) {
+            servoOnOff[i] = (ram.spe.i & mask) > 0 ? 1 : 0;
+            mask = mask<<1;
+          }
+          memcpy(servoPos,ram.servoPos,sizeof(servoPos));
+          memcpy(mapping,ram.mapping,sizeof(mapping));
+//          Serial.print("Default System Settings");
+//          PrintCR();
         }
         else if( tokpars.compare("V?",'|') ) {
           Serial.print("Version 1.0");
@@ -464,18 +488,7 @@ void loop()
       }
     }
   }
-  
-
-/*  float y = x;
-  for(int i = 0; i < 8;i ++) {
-    servoPos[i] = SERVO_CENTER +
-      (int)((float)(SERVO_MAX - SERVO_CENTER) * sin(y));
-    y += M_PI / 5.0;
-  }
-  x += M_PI / 100.0;
-
-  delay(20);  // No point updating faster than servo pulses
-*/}
+}
 void PrintCR() {
   #ifdef WantNewLine
   Serial.println("");
@@ -496,19 +509,24 @@ void eeprom_out(us16 eeprom_adress,us32* Data,us16 bytes) {
     *(Data++) = EEPROM.read(eeprom_adress++);
   }
 }
+void set_default_ram() {
+  ram.board = 1;
+  ram.bitrate = 9600;//115200
+  ram.spe.i = 0xffff;
+  ram.lowerlimit = 20000;
+  ram.upperlimit = 40000;
+  ram.structend = 42;
+  int i;
+  for(i=0;i<16;i++){
+  ram.mapping[i] = i;
+  if(i<8)
+    ram.servoPos[i] = 30000;
+  else
+    ram.servoPos[i] = 0;
+  }
+}
 
-
-/*  us8 board;
-  us32 bitrate;
-  us8 mapping[16];
-  us16 servoPos[16];
-  packed spe;
-  us16 lowerlimit;
-  us16 upperlimit;
-  us8 structend;
-*/
-
-void RisingInterrupt()
+/*void RisingInterrupt()
 {
  attachInterrupt(1, FallingInterrupt, FALLING);
  risingtime[0]=micros();
@@ -518,7 +536,7 @@ void FallingInterrupt()
  attachInterrupt(1, RisingInterrupt, RISING);
  intime[0]=micros()-risingtime[0];
 }
-
+*/
 extern "C"
 {
 
