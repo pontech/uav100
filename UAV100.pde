@@ -1,4 +1,4 @@
-#include "PICLIB/core.h"
+#include "pic32lib/core.h"
 #include "TokenParser/TokenParser.h"
 #include <EEPROM.h>
 #define WantNewLine // todo: 2 comment out before finalized
@@ -185,7 +185,7 @@ void loop()
 //      Serial.println(servoPos[15]);
     }
   }
-Serial.println(servoPos15);
+//Serial.println(servoPos15);
   if (Serial.available() > 0)
   {
     ch = Serial.read();
@@ -507,10 +507,17 @@ Serial.println(servoPos15);
         else if( tokpars.compare("RLY?") ) {
           tokpars.advanceTail(3);
           num1 = tokpars.to_e16();
+          tokpars.nextToken();
+          num2 = tokpars.to_e16();
 //          Serial.print(num1.value,DEC);
 //          PrintCR();
           if(num1.value == 0)
-            PORTBINV = 0x1000;
+          {
+            if number2.value == 0
+              PORTBCLR = 0x1000;
+                else
+              PORTBCLR = 0x1000;
+          }
           else if(num1.value == 1)
             PORTBINV = 0x2000;
           else if(num1.value == 2)
@@ -524,10 +531,12 @@ Serial.println(servoPos15);
           ram.pivotstate = num1.value;
           if (ram.pivotstate == 0) {
             digitalWrite(13,HIGH);
+            ram.spe &= ~0x1000
           }
           else
           {
-            
+            digitalWrite(13,LOW);
+            ram.spe |= 0x1000
           }
         }
 /*        else if( tokpars.compare("size") ) {
