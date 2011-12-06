@@ -1,7 +1,7 @@
 #include "pic32lib/core.h"
 #include "TokenParser/TokenParser.h"
 #include <EEPROM.h>
-#define WantNewLine // todo: 2 comment out before finalized
+//#define WantNewLine // todo: 2 comment out before finalized
 #define s8 signed char
 #define s16 signed short int
 #define s32 signed long
@@ -513,30 +513,46 @@ void loop()
 //          PrintCR();
           if(num1.value == 0)
           {
-            if number2.value == 0
+            if (num2.value == 0)
               PORTBCLR = 0x1000;
                 else
-              PORTBCLR = 0x1000;
+              PORTBSET = 0x1000;
           }
           else if(num1.value == 1)
-            PORTBINV = 0x2000;
+          {
+            if (num2.value == 0)
+              PORTBCLR = 0x2000;
+                else
+              PORTBSET = 0x2000;
+          }
           else if(num1.value == 2)
-            PORTCINV = 0x2000;
+          {
+            if (num2.value == 0)
+              PORTCCLR = 0x2000;
+                else
+              PORTCSET = 0x2000;
+          }
           else if(num1.value == 3)
-            PORTDINV = 0x01;
+          {
+            if (num2.value == 0)
+              PORTDCLR = 0x01;
+                else
+              PORTDSET = 0x01;
+          }
         }
         else if( tokpars.compare("PIVOT?") ) {
-          tokpars.advanceTail(3);
+          tokpars.advanceTail(5);
           num1 = tokpars.to_e16();
+//          Serial.print(num1.value,DEC);
           ram.pivotstate = num1.value;
           if (ram.pivotstate == 0) {
             digitalWrite(13,HIGH);
-            ram.spe &= ~0x1000
+            ram.spe.i &= ~0x8000;
           }
           else
           {
             digitalWrite(13,LOW);
-            ram.spe |= 0x1000
+            ram.spe.i |= 0x8000;
           }
         }
 /*        else if( tokpars.compare("size") ) {
@@ -601,7 +617,7 @@ void SSD() {
 }
 void set_default_ram() {
   ram.board = 1;
-  ram.bitrate = 9600;//115200
+  ram.bitrate = 115200;
   ram.spe.i = 0x7fff;
   ram.lowerlimit = 20000;
   ram.upperlimit = 40000;
