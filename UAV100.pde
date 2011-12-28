@@ -39,7 +39,7 @@ typedef struct {
 #define SERVO_MAX    (SERVO_MIN * 2)               // 2.0 mS
 #define SERVO_CENTER ((SERVO_MIN + SERVO_MAX) / 2) // 1.5 mS
 
-us8 servoPin[16] = { 26, 27, 28, 29, 30, 31, 32, 33, 42, 41, 14, 20, 15, 21, 25, 36}; //servo in and out pins
+us8 servoPin[16] = { 64, 65, 66, 67, 68, 69, 70, 71, 16, 17, 18, 19, 20, 21, 31, 54}; //servo in and out pins
 us8 servoOnOff[16] = { 1, 1, 1, 1, 1, 1, 1, 1}; //sets the servo outs to be off or on
 us32 risingtime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track risetimes
 us32 intime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //time value was high
@@ -60,6 +60,7 @@ us8 pivot_this;
 
 void setup()
 {
+  TurnOffSecondaryOscillator();
   eeprom_out(0,(us32*)&ram,sizeof(ram)); //get structure from memory
   if (ram.structend != 42)
     set_default_ram();
@@ -80,7 +81,7 @@ void setup()
   }
   Serial.begin(ram.bitrate);
 
-  pinMode(13, OUTPUT);
+  pinMode(102, OUTPUT);
 //  attachInterrupt(1, RisingInterrupt, RISING);
 
   // Initialize timer to 400 Hz (50 Hz * 8 servos)
@@ -118,12 +119,13 @@ void setup()
   IFS1CLR = 0x0001; //clear the interupt flag bit
   IEC1SET= 0x0001; // Enable Change Notice interrupts
   IEC0SET = 0x10000000;   //turn intrupts on
-  pinMode(41, INPUT);
-  pinMode(42, INPUT);
-  pinMode(36, INPUT);
-  pinMode(43, OUTPUT);
-  pinMode(13, OUTPUT);
-  digitalWrite(13,HIGH);
+  pinMode(17, INPUT);
+  pinMode(16, INPUT);
+  pinMode(29, INPUT);
+  pinMode(54, INPUT);
+  pinMode(80, OUTPUT);
+  pinMode(102, OUTPUT);
+  digitalWrite(102,HIGH);
 
   TRISBCLR = 0x3000; //code for relay driver
   TRISCCLR = 0x2000;
@@ -131,7 +133,7 @@ void setup()
   PORTBCLR = 0x3000;
   PORTCCLR = 0x2000;
   PORTDCLR = 0x01;
-  pinMode(3, OUTPUT);
+  pinMode(48, OUTPUT);
 }
 
 e16 num1;//temporary values to parse into
@@ -173,14 +175,14 @@ void loop()
     pivot_last = pivot_this;
     if (pivot_this == 1) {
       SSD();
-      digitalWrite(43,HIGH);
+      digitalWrite(80,HIGH);
 //      Serial.println("changing to SSD");
 //      Serial.println(servoPos[15]);
       
     }
     else if(pivot_this == 0) {
       SRS();
-      digitalWrite(43,LOW);
+      digitalWrite(80,LOW);
 //      Serial.println("changing to SRS");
 //      Serial.println(servoPos[15]);
     }
@@ -316,14 +318,14 @@ void loop()
         }
         else if( tokpars.compare("V?",'|') ) {
           Serial.print("UAV100 Version 0.1 2011.12.04.20.08");
-/*#if defined (_BOARD_MEGA_)
+#if defined (_BOARD_MEGA_)
           Serial.print("pins_arduino_pic32_mega.cxx");
 #elif defined (_BOARD_UNO_)
 	          Serial.print("pins_arduino_pic32_uno.cxx");
 #else
 	          Serial.print("pins_arduino_pic32_default.cxx");
 #endif
-*/
+
           PrintCR();
         }
         else if( tokpars.compare("?",'|') ) {
@@ -366,7 +368,7 @@ void loop()
           else
           {
             num1 = tokpars.to_e16();
-            if(servo<8)
+            if(servo<8) // todo: 
               servoPos[servo] = num1.value*2 > ram.upperlimit ? ram.upperlimit : num1.value*2 < ram.lowerlimit ? ram.lowerlimit : num1.value*2;
 //            Serial.print("Move Servo ");
 //            Serial.print(mapping[servo],DEC);
@@ -491,7 +493,7 @@ void loop()
           num1 = tokpars.to_e16();
           
  //         Serial.print("Analog ");
-          Serial.print(analogRead(A9));
+          Serial.print(analogRead(A11));
           PrintCR();
         }
         else if( tokpars.compare("SLU?") ) {
@@ -546,12 +548,12 @@ void loop()
 //          Serial.print(num1.value,DEC);
           ram.pivotstate = num1.value;
           if (ram.pivotstate == 0) {
-            digitalWrite(13,HIGH);
+            digitalWrite(102,HIGH);
             ram.spe.i &= ~0x8000;
           }
           else
           {
-            digitalWrite(13,LOW);
+            digitalWrite(102,LOW);
             ram.spe.i |= 0x8000;
           }
         }
@@ -632,7 +634,13 @@ void set_default_ram() {
     ram.servoPos[i] = 0;
   }
 }
-
+void TurnOffSecondaryOscillator() {
+  unsigned int dma_status;
+  unsigned int int_status;
+  mSYSTEMUnlock(int_status, dma_status);
+  OSCCONCLR = _OSCCON_SOSCEN_MASK;
+  mSYSTEMLock(int_status, dma_status);
+}
 /*void RisingInterrupt()
 {
  attachInterrupt(1, FallingInterrupt, FALLING);
