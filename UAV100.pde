@@ -54,7 +54,7 @@ us8 servo = 0;
 us8 mapping[16] ;//= {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
 bool active = true;
 us8 i; //index for loops
-us8 pivot_last = 1;
+us8 pivot_last = 3;
 us8 pivot_this;
 
 
@@ -125,7 +125,7 @@ void setup()
   pinMode(54, INPUT);
   pinMode(80, OUTPUT);
   pinMode(102, OUTPUT);
-  digitalWrite(102,HIGH);
+  digitalWrite(102,LOW);
 
   TRISBCLR = 0x3000; //code for relay driver
   TRISCCLR = 0x2000;
@@ -620,10 +620,10 @@ void SSD() {
 void set_default_ram() {
   ram.board = 1;
   ram.bitrate = 115200;
-  ram.spe.i = 0x7fff;
+  ram.spe.i = 0xffff;
   ram.lowerlimit = 20000;
   ram.upperlimit = 40000;
-  ram.pivotstate = 0;
+  ram.pivotstate = 1;
   ram.structend = 42;
   int i;
   for(i=0;i<16;i++){
