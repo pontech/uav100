@@ -1,6 +1,7 @@
 #include "pic32lib/core.h"
 #include "TokenParser/TokenParser.h"
 #include <EEPROM.h>
+#include <HardwareSerial.h>
 //#define WantNewLine // todo: 2 comment out before finalized
 #define s8 signed char
 #define s16 signed short int
@@ -56,7 +57,8 @@ bool active = true;
 us8 i; //index for loops
 us8 pivot_last = 3;
 us8 pivot_this;
-
+//HardwareSerial& MySerial=Serial0;
+USBSerial& MySerial=Serial;
 
 void setup()
 {
@@ -79,7 +81,7 @@ void setup()
   for(i=0;i<7;i++){ //todo: 2 fix memory
     ram.mapping[i]=i+8;
   }
-  Serial0.begin(ram.bitrate);
+  MySerial.begin(ram.bitrate);
 
   pinMode(102, OUTPUT);
 //  attachInterrupt(1, RisingInterrupt, RISING);
@@ -156,7 +158,7 @@ void loop()
       //IEC0CLR = 0x10000000;   //turn intrupts off
       servoPos[i] = servoPos[mapping[i]] > ram.upperlimit ? ram.upperlimit : servoPos[mapping[i]] < ram.lowerlimit ? ram.lowerlimit : servoPos[mapping[i]];
       //servoPos[i]=servoPos[mapping[i]]; // todo: 3 fix softlimits
-      //Serial0.print(servoPos[mapping[i]],DEC);
+      //MySerial.print(servoPos[mapping[i]],DEC);
       //PrintCR();
       //IEC0SET = 0x10000000;   //turn intrupts on
     }
@@ -176,25 +178,25 @@ void loop()
     if (pivot_this == 1) {
       SSD();
       digitalWrite(80,HIGH);
-//      Serial0.println("changing to SSD");
-//      Serial0.println(servoPos[15]);
+//      MySerial.println("changing to SSD");
+//      MySerial.println(servoPos[15]);
       
     }
     else if(pivot_this == 0) {
       SRS();
       digitalWrite(80,LOW);
-//      Serial0.println("changing to SRS");
-//      Serial0.println(servoPos[15]);
+//      MySerial.println("changing to SRS");
+//      MySerial.println(servoPos[15]);
     }
   }
-//Serial0.println(servoPos15);
-  if (Serial0.available() > 0)
+//MySerial.println(servoPos15);
+  if (MySerial.available() > 0)
   {
-    ch = Serial0.read();
+    ch = MySerial.read();
     if( ctr < 0x20) {
       buff[ctr++] = ch;
     }
- //Serial0.println(intime[0]); // todo: 2 buffer this value
+ //MySerial.println(intime[0]); // todo: 2 buffer this value
  
     if (ch == '\r')
     {
@@ -211,7 +213,7 @@ void loop()
           if (num1.value==ram.board || num1.value==0)
           {
             active=true;
-//            Serial0.print("OK");
+//            MySerial.print("OK");
 //            PrintCR();
           }
           else
@@ -223,16 +225,16 @@ void loop()
       if(active)
         {
         if( tokpars.compare("BD?",'|' ) ) {
-//          Serial0.print("Board ");
-          Serial0.print(ram.board,DEC);
+//          MySerial.print("Board ");
+          MySerial.print(ram.board,DEC);
           PrintCR();
         }
         else if( tokpars.compare("ID?" ) ) {
           tokpars.advanceTail(2);
           if(tokpars.contains("?"))
           {
-//            Serial0.print("Board ");
-            Serial0.print(ram.board,DEC);
+//            MySerial.print("Board ");
+            MySerial.print(ram.board,DEC);
             PrintCR();            
           }
           else
@@ -241,13 +243,13 @@ void loop()
             if (num1.value > 0 && num1.value < 256)
             {
               ram.board = num1.value;
-//              Serial0.print("Board ");
-//              Serial0.print(ram.board,DEC);
+//              MySerial.print("Board ");
+//              MySerial.print(ram.board,DEC);
               active=false;
             }
             else
             {
-              Serial0.print("NOK");
+              MySerial.print("NOK");
             }
             PrintCR();
           }
@@ -256,11 +258,11 @@ void loop()
           tokpars.advanceTail(2);
           num3 = tokpars.to_e32();
           ram.bitrate = num3.value;
-//          Serial0.print("Bit Rate ");
-//          Serial0.print(ram.bitrate);
+//          MySerial.print("Bit Rate ");
+//          MySerial.print(ram.bitrate);
 //          PrintCR();
-          Serial0.end();
-          Serial0.begin(ram.bitrate);
+          MySerial.end();
+          MySerial.begin(ram.bitrate);
         }
         else if( tokpars.compare("WE?" ) ) {
           tokpars.advanceTail(2);
@@ -268,28 +270,28 @@ void loop()
           tokpars.nextToken();
           num3 = tokpars.to_e32();
           EEPROM.write(num1.value, num3.value);
-//          Serial0.print("Write ");
-//          Serial0.print(num2.value);
-//          Serial0.print(" to ");
-//          Serial0.print(num1.value);
+//          MySerial.print("Write ");
+//          MySerial.print(num2.value);
+//          MySerial.print(" to ");
+//          MySerial.print(num1.value);
 //          PrintCR();
         }
         else if( tokpars.compare("RE?" ) ) {
           tokpars.advanceTail(2);
           num3 = tokpars.to_e32();
-          Serial0.print(EEPROM.read(num3.value),DEC);
-//          Serial0.print(num3.value,DEC);
+          MySerial.print(EEPROM.read(num3.value),DEC);
+//          MySerial.print(num3.value,DEC);
           PrintCR();
         }
         else if( tokpars.compare("WSS") ) {
           eeprom_in((us32*)&ram,0,sizeof(ram));
-//          Serial0.print("Write System Settings");
+//          MySerial.print("Write System Settings");
 //          PrintCR();
         }
         else if( tokpars.compare("RSS") ) {
           eeprom_out(0,(us32*)&ram,sizeof(ram));
-          Serial0.end();
-          Serial0.begin(ram.bitrate);
+          MySerial.end();
+          MySerial.begin(ram.bitrate);
           active=false;
           us16 mask = 1;
           for(i=0;i<8;i++) {
@@ -298,13 +300,13 @@ void loop()
           }
           memcpy(servoPos,ram.servoPos,sizeof(servoPos));
           memcpy(mapping,ram.mapping,sizeof(mapping));
-//          Serial0.print("Read System Settings");
+//          MySerial.print("Read System Settings");
 //          PrintCR();
         }
         else if( tokpars.compare("DSS") ) {
           set_default_ram();
-          Serial0.end();
-          Serial0.begin(ram.bitrate);
+          MySerial.end();
+          MySerial.begin(ram.bitrate);
           active=false;
           us16 mask = 1;
           for(i=0;i<8;i++) {
@@ -313,36 +315,36 @@ void loop()
           }
           memcpy(servoPos,ram.servoPos,sizeof(servoPos));
           memcpy(mapping,ram.mapping,sizeof(mapping));
-//          Serial0.print("Default System Settings");
+//          MySerial.print("Default System Settings");
 //          PrintCR();
         }
         else if( tokpars.compare("V?",'|') ) {
-          Serial0.print("UAV100 Version 0.2 2011.12.28.15.30");
+          MySerial.print("UAV100 Version 0.3 2012.01.03.12.30");
 /*
 #if defined (_BOARD_MEGA_)
-          Serial0.print(" pins_arduino_pic32_mega.cxx");
+          MySerial.print(" pins_arduino_pic32_mega.cxx");
 #elif defined (_BOARD_UNO_)
-	          Serial0.print(" pins_arduino_pic32_uno.cxx");
+	          MySerial.print(" pins_arduino_pic32_uno.cxx");
 #else
-	          Serial0.print(" pins_arduino_pic32_default.cxx");
+	          MySerial.print(" pins_arduino_pic32_default.cxx");
 #endif
 */
           PrintCR();
         }
         else if( tokpars.compare("?",'|') ) {
-          Serial0.print("Visit pontech.com for assistance.");
+          MySerial.print("Visit pontech.com for assistance.");
           PrintCR();
         }
         else if( tokpars.compare("MS?") ) {
           tokpars.advanceTail(2);
           if( tokpars.compare("?",'|') )
           {
-            Serial0.print("Read Mode Removed");
+            MySerial.print("Read Mode Removed");
             PrintCR();
           }
           else
           {
-            Serial0.print("Write Mode Removed");
+            MySerial.print("Write Mode Removed");
             PrintCR();
           }
         }
@@ -350,8 +352,8 @@ void loop()
           tokpars.advanceTail(2);
           num1 = tokpars.to_e16();
           servo = (us8)num1.value;
-//          Serial0.print("servo ");
-//          Serial0.print(servo,DEC);
+//          MySerial.print("servo ");
+//          MySerial.print(servo,DEC);
 //          PrintCR();
         }
         else if( tokpars.compare("M?") ) {
@@ -360,10 +362,10 @@ void loop()
           {
             tokpars.advanceTail(1);
             num1 = tokpars.to_e16();
-//            Serial0.print("Servo ");
-//            Serial0.print(num1.value,DEC);
-//            Serial0.print(" in pos ");
-            Serial0.print(servoPos[mapping[num1.value]]/2,DEC);
+//            MySerial.print("Servo ");
+//            MySerial.print(num1.value,DEC);
+//            MySerial.print(" in pos ");
+            MySerial.print(servoPos[mapping[num1.value]]/2,DEC);
             PrintCR();
           }
           else
@@ -371,8 +373,8 @@ void loop()
             num1 = tokpars.to_e16();
             if(servo<8) // todo: 
               servoPos[servo] = num1.value*2 > ram.upperlimit ? ram.upperlimit : num1.value*2 < ram.lowerlimit ? ram.lowerlimit : num1.value*2;
-//            Serial0.print("Move Servo ");
-//            Serial0.print(mapping[servo],DEC);
+//            MySerial.print("Move Servo ");
+//            MySerial.print(mapping[servo],DEC);
 //            PrintCR();
           }
         }
@@ -380,26 +382,26 @@ void loop()
           tokpars.advanceTail(1);
           num1 = tokpars.to_e16();
           servoPos[servo] = num1.value*2 + servoPos[servo] > ram.upperlimit ? ram.upperlimit : num1.value*2 + servoPos[servo] < ram.lowerlimit ? ram.lowerlimit : num1.value*2+servoPos[servo];
-//          Serial0.print("Relative ");
-//          Serial0.print(num1.value);
+//          MySerial.print("Relative ");
+//          MySerial.print(num1.value);
 //          PrintCR();
         }
         else if( tokpars.compare("SS?" ) ) {
           tokpars.advanceTail(2);
           if( tokpars.compare("D" ) ) {
             SSD();
-//            Serial0.print("Default Map");
+//            MySerial.print("Default Map");
 //            PrintCR();
           }
           else if( tokpars.compare("R" ) ) {
             memcpy(ram.mapping,mapping,sizeof(mapping));
-//            Serial0.print("Copy Map to Ram");
+//            MySerial.print("Copy Map to Ram");
 //            PrintCR();
           }
           else if( tokpars.compare("M" ) ) {
             for(i=0;i<16;i++) {
-              Serial0.print(mapping[i],DEC);
-              Serial0.print(" ");
+              MySerial.print(mapping[i],DEC);
+              MySerial.print(" ");
             }
             PrintCR();
           }
@@ -409,33 +411,33 @@ void loop()
             tokpars.nextToken();
             num2 = tokpars.to_e16();
             mapping[num2.value]=num1.value;
-//            Serial0.print("Map ");
-//            Serial0.print(num2.value);
-//            Serial0.print(" to ");
-//            Serial0.print(num1.value);
+//            MySerial.print("Map ");
+//            MySerial.print(num2.value);
+//            MySerial.print(" to ");
+//            MySerial.print(num1.value);
 //            PrintCR();
           }
         }
         else if( tokpars.compare("SRS") ) {
           SRS();
-//          Serial0.print("Copy Ram to Map");
+//          MySerial.print("Copy Ram to Map");
 //          PrintCR();
         }
         else if( tokpars.compare("CSR") ) {
           memcpy(ram.servoPos,servoPos,sizeof(servoPos));
-//          Serial0.print("Copy Servo to Ram");
+//          MySerial.print("Copy Servo to Ram");
 //          PrintCR();
         }
         else if( tokpars.compare("CRS") ) {
           memcpy(servoPos,ram.servoPos,sizeof(servoPos));
-//          Serial0.print("Copy Ram to Servo");
+//          MySerial.print("Copy Ram to Servo");
 //          PrintCR();
         }
         else if( tokpars.compare("SPE?") ) {
           tokpars.advanceTail(3);
           if( tokpars.compare("?",'|') ) {
-            Serial0.print("0x");
-            Serial0.print(ram.spe.i,HEX); 
+            MySerial.print("0x");
+            MySerial.print(ram.spe.i,HEX); 
             PrintCR();
           }
           else
@@ -447,8 +449,8 @@ void loop()
               servoOnOff[i] = (ram.spe.i & mask) > 0 ? 1 : 0;
               mask = mask<<1;
             }
-//            Serial0.print("Servo PPM Enable ");
-//            Serial0.print(ram.spe,DEC);
+//            MySerial.print("Servo PPM Enable ");
+//            MySerial.print(ram.spe,DEC);
 //            PrintCR();
           }
         }
@@ -457,8 +459,8 @@ void loop()
           num1 = tokpars.to_e16();
           if(num1.value >=0 && num1.value <8)
             digitalWrite(servoPin[num1.value], HIGH);
-//          Serial0.print("Set Pin ");
-//          Serial0.print(num1.value);
+//          MySerial.print("Set Pin ");
+//          MySerial.print(num1.value);
 //          PrintCR();
         }
         else if( tokpars.compare("PC?" ) ) {
@@ -466,8 +468,8 @@ void loop()
           num1 = tokpars.to_e16();
           if(num1.value >=0 && num1.value <8)
             digitalWrite(servoPin[num1.value], LOW);
-//          Serial0.print("Clear Pin ");
-//          Serial0.print(num1.value);
+//          MySerial.print("Clear Pin ");
+//          MySerial.print(num1.value);
 //          PrintCR();
         }
         else if( tokpars.compare("PT?" ) ) {
@@ -475,17 +477,17 @@ void loop()
           num1 = tokpars.to_e16();
           if(num1.value >=0 && num1.value <8)
             digitalWrite(servoPin[num1.value], !digitalRead(servoPin[num1.value]));
-//          Serial0.print("Toggle Pin ");
-//          Serial0.print(num1.value);
+//          MySerial.print("Toggle Pin ");
+//          MySerial.print(num1.value);
 //          PrintCR();
         }
         else if( tokpars.compare("RP?|",'|' ) ) {
           tokpars.advanceTail(3);
           num1 = tokpars.to_e16();
           if(num1.value >7 && num1.value <16) {
-            Serial0.print(!digitalRead(servoPin[num1.value]),DEC);
-//            Serial0.print("Read Pin ");
-//            Serial0.print(num1.value);
+            MySerial.print(!digitalRead(servoPin[num1.value]),DEC);
+//            MySerial.print("Read Pin ");
+//            MySerial.print(num1.value);
             PrintCR();
           }
         }
@@ -493,8 +495,8 @@ void loop()
           tokpars.advanceTail(3);
           num1 = tokpars.to_e16();
           
- //         Serial0.print("Analog ");
-          Serial0.print(analogRead(A11));
+ //         MySerial.print("Analog ");
+          MySerial.print(analogRead(A11));
           PrintCR();
         }
         else if( tokpars.compare("SLU?") ) {
@@ -512,7 +514,7 @@ void loop()
           num1 = tokpars.to_e16();
           tokpars.nextToken();
           num2 = tokpars.to_e16();
-//          Serial0.print(num1.value,DEC);
+//          MySerial.print(num1.value,DEC);
 //          PrintCR();
           if(num1.value == 0)
           {
@@ -546,7 +548,7 @@ void loop()
         else if( tokpars.compare("PIVOT?") ) {
           tokpars.advanceTail(5);
           num1 = tokpars.to_e16();
-//          Serial0.print(num1.value,DEC);
+//          MySerial.print(num1.value,DEC);
           ram.pivotstate = num1.value;
           if (ram.pivotstate == 0) {
             digitalWrite(102,HIGH);
@@ -559,30 +561,30 @@ void loop()
           }
         }
 /*        else if( tokpars.compare("size") ) {
-          Serial0.print(sizeof(ram.board),DEC);
+          MySerial.print(sizeof(ram.board),DEC);
           PrintCR();
-          Serial0.print(sizeof(ram.bitrate),DEC);
+          MySerial.print(sizeof(ram.bitrate),DEC);
           PrintCR();
-          Serial0.print(sizeof(ram.mapping),DEC);
+          MySerial.print(sizeof(ram.mapping),DEC);
           PrintCR();
-          Serial0.print(sizeof(ram.servoPos),DEC);
+          MySerial.print(sizeof(ram.servoPos),DEC);
           PrintCR();
-          Serial0.print(sizeof(packed_int),DEC);
+          MySerial.print(sizeof(packed_int),DEC);
           PrintCR();
-          Serial0.print(sizeof(ram.lowerlimit),DEC);
+          MySerial.print(sizeof(ram.lowerlimit),DEC);
           PrintCR();
-          Serial0.print(sizeof(ram.upperlimit),DEC);
+          MySerial.print(sizeof(ram.upperlimit),DEC);
           PrintCR();
-          Serial0.print(sizeof(ram.structend),DEC);
+          MySerial.print(sizeof(ram.structend),DEC);
           PrintCR();
-          Serial0.print(sizeof(ram_struct),DEC);
+          MySerial.print(sizeof(ram_struct),DEC);
           PrintCR();
         }
 */  
   
         if( tokpars.compare("TIMES") ) {
           for(i=0;i<16;i++) {
-          Serial0.print(servoPos[i],DEC);
+          MySerial.print(servoPos[i],DEC);
           PrintCR();
           }
         }
@@ -592,9 +594,9 @@ void loop()
 }
 void PrintCR() {
   #ifdef WantNewLine
-  Serial0.println("");
+  MySerial.println("");
   #else
-  Serial0.print("\r");
+  MySerial.print("\r");
   #endif
 }
 
