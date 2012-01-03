@@ -2,13 +2,24 @@
 #include "TokenParser/TokenParser.h"
 #include <EEPROM.h>
 #include <HardwareSerial.h>
-//#define WantNewLine // todo: 2 comment out before finalized
+#include <SPI.h>
+#define WantNewLine // todo: 2 comment out before finalized
 #define s8 signed char
 #define s16 signed short int
 #define s32 signed long
 #define us8 unsigned char
 #define us16 unsigned short int//unsigned short int
 #define us32 long unsigned
+typedef struct packed_int2 {
+  us8 l;
+  us8 u;
+} hilow;
+
+typedef union {
+  hilow p;
+  us16 val;
+} hilow16;
+
 typedef struct {
   us32 bitrate;
   us8 mapping[16];
@@ -57,6 +68,16 @@ bool active = true;
 us8 i; //index for loops
 us8 pivot_last = 3;
 us8 pivot_this;
+hilow16 accel_x;
+hilow16 accel_y;
+hilow16 accel_z;
+hilow16 temp;
+hilow16 gyro_x;
+hilow16 gyro_y;
+hilow16 gyro_z;
+us8 gyro_cs = 26;
+us8 GyroScroll = 0;
+
 //HardwareSerial& MySerial=Serial0;
 USBSerial& MySerial=Serial;
 
@@ -136,6 +157,28 @@ void setup()
   PORTCCLR = 0x2000;
   PORTDCLR = 0x01;
   pinMode(48, OUTPUT);
+  
+  //gyro setup
+    pinMode(25,OUTPUT);
+  digitalWrite(25,HIGH);
+  SPI.begin();
+  SPI.setDataMode(0x40);
+  pinMode(gyro_cs, OUTPUT);
+  digitalWrite(gyro_cs,HIGH);
+
+  SPI.setClockDivider(39);//0=40mhz 1=20 2=13.3
+  while(millis()<100) {
+    delay(10);
+  }
+  digitalWrite(gyro_cs,LOW);
+  SPI.transfer(0x6a);//USER_CTRL
+  SPI.transfer(0x50);
+  digitalWrite(gyro_cs,HIGH);
+  digitalWrite(gyro_cs,LOW);
+  SPI.transfer(0x6b);//Power Managment 1
+  SPI.transfer(0x01);//clock x gyro,temp enabled,cycle off,sleep off,reset off
+  digitalWrite(gyro_cs,HIGH);
+
 }
 
 e16 num1;//temporary values to parse into
@@ -188,6 +231,10 @@ void loop()
 //      MySerial.println("changing to SRS");
 //      MySerial.println(servoPos[15]);
     }
+  }
+  if (GyroScroll != 0){
+    GyroPrint();
+    delay(200);
   }
 //MySerial.println(servoPos15);
   if (MySerial.available() > 0)
@@ -560,6 +607,12 @@ void loop()
             ram.spe.i |= 0x8000;
           }
         }
+        else if( tokpars.compare("GYROSCROLL") ) {
+          GyroScroll=!GyroScroll;
+        }
+        else if( tokpars.compare("GYROSINGLE") ) {
+          GyroPrint();
+        }
 /*        else if( tokpars.compare("size") ) {
           MySerial.print(sizeof(ram.board),DEC);
           PrintCR();
@@ -594,7 +647,7 @@ void loop()
 }
 void PrintCR() {
   #ifdef WantNewLine
-  MySerial.println("");
+  MySerial.print("\r\n");
   #else
   MySerial.print("\r");
   #endif
@@ -643,6 +696,40 @@ void TurnOffSecondaryOscillator() {
   mSYSTEMUnlock(int_status, dma_status);
   OSCCONCLR = _OSCCON_SOSCEN_MASK;
   mSYSTEMLock(int_status, dma_status);
+}
+void GyroPrint() {
+  digitalWrite(gyro_cs,LOW);
+  SPI.transfer(0x3b | 0x80);//accel_xout_h
+  accel_x.p.u=SPI.transfer(0x00);
+  accel_x.p.l=SPI.transfer(0x00);
+  accel_y.p.u=SPI.transfer(0x00);
+  accel_y.p.l=SPI.transfer(0x00);
+  accel_z.p.u=SPI.transfer(0x00);
+  accel_z.p.l=SPI.transfer(0x00);
+  temp.p.u=SPI.transfer(0x00);
+  temp.p.l=SPI.transfer(0x00);
+  gyro_x.p.u=SPI.transfer(0x00);
+  gyro_x.p.l=SPI.transfer(0x00);
+  gyro_y.p.u=SPI.transfer(0x00);
+  gyro_y.p.l=SPI.transfer(0x00);
+  gyro_z.p.u=SPI.transfer(0x00);
+  gyro_z.p.l=SPI.transfer(0x00);
+  digitalWrite(gyro_cs,HIGH);
+  MySerial.print((s16)accel_x.val,DEC);
+  MySerial.print(", ");
+  MySerial.print((s16)accel_y.val,DEC);
+  MySerial.print(", ");
+  MySerial.print((s16)accel_z.val,DEC);
+  MySerial.print(", ");
+  MySerial.print((float)((s16)temp.val+521)/340+35);
+  MySerial.print(", ");
+  MySerial.print((s16)gyro_x.val,DEC);
+  MySerial.print(", ");
+  MySerial.print((s16)gyro_y.val,DEC);
+  MySerial.print(", ");
+  MySerial.print((s16)gyro_z.val,DEC);
+  PrintCR();
+
 }
 /*void RisingInterrupt()
 {
