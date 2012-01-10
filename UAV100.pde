@@ -1,5 +1,6 @@
 #include "pic32lib/core.h"
 #include "TokenParser/TokenParser.h"
+#include "GPS/GPS.h"
 #include <EEPROM.h>
 #include <HardwareSerial.h>
 #include <SPI.h>
@@ -8,7 +9,7 @@
 #define s16 signed short int
 #define s32 signed long
 #define us8 unsigned char
-#define us16 unsigned short int//unsigned short int
+#define us16 unsigned short int
 #define us32 long unsigned
 typedef struct packed_int2 {
   us8 l;
@@ -57,10 +58,14 @@ us32 risingtime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track risetimes
 us32 intime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //time value was high
 us32 lastused[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track last time a value was captured
 ram_struct ram;
+GPS_INFO gps_data;
 servo_t servoPos[16];//array that holds servo positions output and input
 us8 buff[0x20];
 us8 ctr;
 us8 ch;
+us8 buff1[0x7f];
+us8 ctr1;
+us8 ch1;
 //volatile int state = LOW;
 us8 servo = 0;
 us8 mapping[16] ;//= {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15};
@@ -77,6 +82,7 @@ hilow16 gyro_y;
 hilow16 gyro_z;
 us8 gyro_cs = 26;
 us8 GyroScroll = 0;
+us8 gpsraw = 0;
 
 //HardwareSerial& MySerial=Serial0;
 USBSerial& MySerial=Serial;
@@ -103,6 +109,7 @@ void setup()
     ram.mapping[i]=i+8;
   }
   MySerial.begin(ram.bitrate);
+  Serial1.begin(9600);
 
   pinMode(102, OUTPUT);
 //  attachInterrupt(1, RisingInterrupt, RISING);
@@ -240,7 +247,7 @@ void loop()
   if (MySerial.available() > 0)
   {
     ch = MySerial.read();
-    if( ctr < 0x20) {
+    if( ctr < sizeof(buff)) {
       buff[ctr++] = ch;
     }
  //MySerial.println(intime[0]); // todo: 2 buffer this value
@@ -613,6 +620,11 @@ void loop()
         else if( tokpars.compare("GYROSINGLE") ) {
           GyroPrint();
         }
+        else if( tokpars.compare("GPSRAW") ) {
+          gpsraw=(gpsraw == 0 ? 1 : 0);
+          MySerial.print(gpsraw,DEC);
+          PrintCR();
+        }
 /*        else if( tokpars.compare("size") ) {
           MySerial.print(sizeof(ram.board),DEC);
           PrintCR();
@@ -640,6 +652,84 @@ void loop()
           MySerial.print(servoPos[i],DEC);
           PrintCR();
           }
+        }
+      }
+    }
+  }
+  //GPS
+  if(gpsraw!=0)
+  {
+    if( Serial1.available() > 0) {
+      ch1 = Serial1.read();
+      MySerial.print(ch1);
+    }
+  }
+  else
+  {
+    if( Serial1.available() > 0) {
+      ch1 = Serial1.read();
+      if( ctr1 < sizeof(buff1)) {
+        buff1[ctr1++] = ch1;
+      }
+   
+      if (ch1 == '\n')
+      {
+        buff1[ctr1-2] = ' ';
+        TokenParser tokpars1(buff1,ctr1);
+        tokpars1.replace(',',' ');
+        tokpars1.nextToken();
+        ctr1 = 0;
+        //ch = buff[0];
+        if( tokpars1.compare("$GPGGA" ) ) {
+          tokpars1.nextToken();
+          num3=tokpars1.to_e32();
+          gps_data.time.hour=num3.value/10000000;
+          gps_data.time.minute=(num3.value%10000000)/100000;//(num3.value-gps_data.time.hour*10000000)/100000;
+          gps_data.time.second=(num3.value%100000)/1000;//(num3.value-gps_data.time.hour*10000000 - gps_data.time.minute*100000)/1000;
+          gps_data.time.millisecond=(num3.value%1000);//(num3.value-gps_data.time.hour*10000000 - gps_data.time.minute*100000 - gps_data.time.second*1000);
+          MySerial.print(gps_data.time.hour,DEC);
+          MySerial.print(":");
+          MySerial.print(gps_data.time.minute,DEC);
+          MySerial.print(":");
+          MySerial.print(gps_data.time.second,DEC);
+          MySerial.print(":");
+          MySerial.print(gps_data.time.millisecond,DEC);
+          MySerial.print(",");
+          MySerial.print(num3.value,DEC);//time
+          MySerial.print(" ");
+          tokpars1.nextToken();
+          num3=tokpars1.to_e32();
+          MySerial.print(num3.value,DEC);//latitude
+          MySerial.print(" ");
+          tokpars1.nextToken();
+          if( tokpars1.compare("N" ) ) {
+            MySerial.print("N");          
+          }
+          else
+          {
+            MySerial.print("S");
+          }
+          tokpars1.advanceTail(1);
+
+          MySerial.print(" ");
+          tokpars1.nextToken();
+          num3=tokpars1.to_e32();
+          MySerial.print(num3.value,DEC);//longitude
+          MySerial.print(" ");
+          tokpars1.nextToken();
+          if( tokpars1.compare("W" ) ) {
+            MySerial.print("W");          
+          }
+          else
+          {
+            MySerial.print("E");
+          }
+          tokpars1.advanceTail(1);
+          MySerial.print(" ");
+          tokpars1.nextToken();
+          num3=tokpars1.to_e32();
+          MySerial.print(num3.value,DEC);//quality
+          PrintCR();
         }
       }
     }
@@ -857,4 +947,78 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
 }
 
 } // end extern "C"
+
+
+//i2c eeprom example code
+/*
+#include <Wire.h>
+#include "pic32lib/core.h"
+#include "TokenParser/TokenParser.h"
+us8 buff[0x20];
+us8 ctr;
+us8 ch;
+e16 num1;//temporary values to parse into
+e16 num2;
+
+
+void setup()
+{
+  Serial.begin(115200);
+  Wire.begin();
+  
+}
+
+void loop ()
+{
+  if (Serial.available() > 0)
+  {
+    ch = Serial.read();
+    if( ctr < 0x20) {
+      buff[ctr++] = ch;
+    }
+ 
+    if (ch == '\r')
+    {
+      buff[ctr-1] = ' ';
+      TokenParser tokpars(buff,ctr);
+      tokpars.nextToken();
+      ctr = 0;
+      if( tokpars.compare("WR?" ) ) {
+        tokpars.advanceTail(2);
+        num1 = tokpars.to_e16();
+        tokpars.nextToken();
+        num2 = tokpars.to_e16();
+        Serial.print(WriteByte(num1.value,num2.value),DEC);
+//        Serial.print(num1.value,DEC);
+//        Serial.print(", ");
+//        Serial.print(num2.value,DEC);
+        Serial.print("\r\n");      
+      }
+      else if( tokpars.compare("RD?" ) ) {
+        tokpars.advanceTail(2);
+        num1 = tokpars.to_e16();
+        Serial.print(ReadByte(num1.value),DEC);
+//        Serial.print(num1.value,DEC);
+        Serial.print("\r\n");        
+      }
+    }
+  }
+}
+
+us8 WriteByte(us8 adress,us8 data){
+  Wire.beginTransmission(0x50);
+  Wire.send(adress);
+  Wire.send(data);
+  return Wire.endTransmission();
+}
+us8 ReadByte(us8 adress){
+  us8 data;
+  Wire.beginTransmission(0x50);
+  Wire.send(adress);
+  Wire.endTransmission();
+  Wire.requestFrom(0x50, 1);
+  data = Wire.receive();
+  return data;
+}
+*/
 
