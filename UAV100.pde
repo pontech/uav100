@@ -83,12 +83,14 @@ hilow16 gyro_z;
 us8 gyro_cs = 26;
 us8 GyroScroll = 0;
 us8 gpsraw = 0;
+us32 gnow;
 
 //HardwareSerial& MySerial=Serial0;
 USBSerial& MySerial=Serial;
 
 void setup()
 {
+//  ReadCoreTimer();
   TurnOffSecondaryOscillator();
   eeprom_out(0,(us32*)&ram,sizeof(ram)); //get structure from memory
   if (ram.structend != 42)
@@ -145,7 +147,7 @@ void setup()
   CNPUE= 0x00000000; //weak pull up off
   value = PORTB;      //Read the Ports
   value = PORTD;
-  IPC6SET = 0x001f0000; //set priority to 7 sub 4
+  IPC6SET = 0x001f0000;//0x00060000; //0x001f0000;//set priority to 7 sub 4
   IFS1CLR = 0x0001; //clear the interupt flag bit
   IEC1SET= 0x0001; // Enable Change Notice interrupts
   IEC0SET = 0x10000000;   //turn intrupts on
@@ -194,14 +196,19 @@ e32 num3;
 
 void loop()
 {
+  gnow=micros();
+//  delay(1000);
+//  MySerial.print(micros(),DEC);
+//  PrintCR();
 //  digitalWrite(26, !digitalRead(26));
   for(i=0;i<8;i++){
     //zero the values if no input for 100 ms
     us32 nowa=micros();
     us32 last;
-    last=(nowa>lastused[i]) ? nowa-lastused[i] : (0xffffffff - lastused[i]) + nowa;
-//    if (last>100000)
-//      servoPos[i+8]=0;
+    //last=(nowa>lastused[i]) ? nowa-lastused[i] : (0xffffffff - lastused[i]) + nowa;
+    last = nowa-lastused[i];
+    if (last>100000)
+      servoPos[i+8]=0;
     //Copy input to output if mapped
 /*    if (mapping[i]>7)
     {
@@ -222,7 +229,7 @@ void loop()
     pivot_this = digitalRead(servoPin[15]);
   else
     //pivot_this = servoPos15<25000 ? 1 :  0;//servoPos15>32000 ? 1 : servoPos15<28000 ? 0 : 2;
-    pivot_this = servoPos15>32000 ? 1 : servoPos15<28000 ? 0 : 2;//servoPos15>32000 ? 1 : servoPos15<28000 ? 0 : 2;
+    pivot_this = (servoPos15>32000 || servoPos15==0) ? 1 : servoPos15<28000 ? 0 : 2;//servoPos15>32000 ? 1 : servoPos15<28000 ? 0 : 2;
   if (pivot_this != pivot_last ) {
     pivot_last = pivot_this;
     if (pivot_this == 1) {
@@ -625,6 +632,19 @@ void loop()
           MySerial.print(gpsraw,DEC);
           PrintCR();
         }
+        else if( tokpars.compare("A") ) {
+          us32 nowa=micros();
+          us32 last;
+          last=(nowa>lastused[7]) ? nowa-lastused[7] : (0xffffffff - lastused[7]) + nowa;
+
+          MySerial.print(nowa,DEC);
+          MySerial.print(", ");
+          MySerial.print(servoPos15,DEC);
+          MySerial.print(", ");
+          MySerial.print(last,DEC);
+          
+          PrintCR();
+        }
 /*        else if( tokpars.compare("size") ) {
           MySerial.print(sizeof(ram.board),DEC);
           PrintCR();
@@ -656,7 +676,7 @@ void loop()
       }
     }
   }
-  //GPS
+  /* //GPS
   if(gpsraw!=0)
   {
     if( Serial1.available() > 0) {
@@ -734,6 +754,7 @@ void loop()
       }
     }
   }
+  */
 }
 void PrintCR() {
   #ifdef WantNewLine
@@ -865,7 +886,7 @@ void __ISR(_OUTPUT_COMPARE_1_VECTOR,ipl3) pwmOff(void)
   if(++servoNum > 7) servoNum = 0;  // Back to start
 }
 
-void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
+void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
 {
 //  bool temp = digitalRead(43);
 //  digitalWrite(43, temp ^ 1);
@@ -875,7 +896,7 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
   us16 thisb = PORTB;
   us16 thisd = PORTD;
   us32 now;
-  now = micros();
+  now = gnow;//micros();
   if ((thisb ^ lastb) & 0x01)  //cn2
   {
     lastused[0]=now;
