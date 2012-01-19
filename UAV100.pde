@@ -11,6 +11,7 @@
 #define us8 unsigned char
 #define us16 unsigned short int
 #define us32 long unsigned
+#define CORETIMER_TICKS_PER_MICROSECOND		(F_CPU / 2 / 1000000UL)
 typedef struct packed_int2 {
   us8 l;
   us8 u;
@@ -90,7 +91,6 @@ USBSerial& MySerial=Serial;
 
 void setup()
 {
-//  ReadCoreTimer();
   TurnOffSecondaryOscillator();
   eeprom_out(0,(us32*)&ram,sizeof(ram)); //get structure from memory
   if (ram.structend != 42)
@@ -147,7 +147,7 @@ void setup()
   CNPUE= 0x00000000; //weak pull up off
   value = PORTB;      //Read the Ports
   value = PORTD;
-  IPC6SET = 0x001f0000;//0x00060000; //0x001f0000;//set priority to 7 sub 4
+  IPC6SET = 0x00060000;//0x00060000; //0x001f0000;//set priority to 7 sub 4
   IFS1CLR = 0x0001; //clear the interupt flag bit
   IEC1SET= 0x0001; // Enable Change Notice interrupts
   IEC0SET = 0x10000000;   //turn intrupts on
@@ -196,18 +196,16 @@ e32 num3;
 
 void loop()
 {
-  gnow=micros();
-//  delay(1000);
-//  MySerial.print(micros(),DEC);
-//  PrintCR();
-//  digitalWrite(26, !digitalRead(26));
   for(i=0;i<8;i++){
     //zero the values if no input for 100 ms
-    us32 nowa=micros();
+    us32 nowa=ReadCoreTimer();//micros();
     us32 last;
-    //last=(nowa>lastused[i]) ? nowa-lastused[i] : (0xffffffff - lastused[i]) + nowa;
-    last = nowa-lastused[i];
-    if (last>100000)
+    last=(nowa>lastused[i]) ? nowa-lastused[i] : (0xffffffff - lastused[i]) + nowa;
+    //last = nowa-lastused[i];
+//    delay(100);
+//    MySerial.print(last,DEC);
+//    PrintCR();
+    if (last>40000000)//40=1us
       servoPos[i+8]=0;
     //Copy input to output if mapped
 /*    if (mapping[i]>7)
@@ -886,7 +884,7 @@ void __ISR(_OUTPUT_COMPARE_1_VECTOR,ipl3) pwmOff(void)
   if(++servoNum > 7) servoNum = 0;  // Back to start
 }
 
-void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
+void __ISR(_CHANGE_NOTICE_VECTOR, ipl1) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
 {
 //  bool temp = digitalRead(43);
 //  digitalWrite(43, temp ^ 1);
@@ -896,14 +894,14 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NO
   us16 thisb = PORTB;
   us16 thisd = PORTD;
   us32 now;
-  now = gnow;//micros();
+  now = ReadCoreTimer();
   if ((thisb ^ lastb) & 0x01)  //cn2
   {
     lastused[0]=now;
     if (!(thisb & 0x01))
       risingtime[0]=now;
     else if(ram.spe.b.b8)
-      servoPos[8]=((now>risingtime[0]) ? now-risingtime[0] : (0xffffffff - risingtime[0]) + now)*20;
+      servoPos[8]=((now>risingtime[0]) ? now-risingtime[0] : (0xffffffff - risingtime[0]) + now) >> 1;
   }
   if ((thisb ^ lastb) & 0x02) //cn3
   {
@@ -911,7 +909,7 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NO
     if (!(thisb & 0x02))
       risingtime[1]=now;
     else if(ram.spe.b.b9)
-      servoPos[9]=((now>risingtime[1]) ? now-risingtime[1] : (0xffffffff - risingtime[1]) + now)*20;
+      servoPos[9]=((now>risingtime[1]) ? now-risingtime[1] : (0xffffffff - risingtime[1]) + now) >> 1;
   }
   if ((thisb ^ lastb) & 0x04) //cn4
   {
@@ -919,7 +917,7 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NO
     if (!(thisb & 0x04)) //cn4
       risingtime[2]=now;
     else if(ram.spe.b.b10)
-      servoPos[10]=((now>risingtime[2]) ? now-risingtime[2] : (0xffffffff - risingtime[2]) + now)*20;
+      servoPos[10]=((now>risingtime[2]) ? now-risingtime[2] : (0xffffffff - risingtime[2]) + now) >> 1;
   }
   if ((thisb ^ lastb) & 0x08) //cn5
   {
@@ -927,7 +925,7 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NO
     if (!(thisb & 0x08))
       risingtime[3]=now;
     else if(ram.spe.b.b11)
-      servoPos[11]=((now>risingtime[3]) ? now-risingtime[3] : (0xffffffff - risingtime[3]) + now)*20;
+      servoPos[11]=((now>risingtime[3]) ? now-risingtime[3] : (0xffffffff - risingtime[3]) + now) >> 1;
   }
   if ((thisb ^ lastb) & 0x10) //cn6
   {
@@ -935,7 +933,7 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NO
     if (!(thisb & 0x10))
       risingtime[4]=now;
     else  if(ram.spe.b.b12)
-      servoPos[12]=((now>risingtime[4]) ? now-risingtime[4] : (0xffffffff - risingtime[4]) + now)*20;
+      servoPos[12]=((now>risingtime[4]) ? now-risingtime[4] : (0xffffffff - risingtime[4]) + now) >> 1;
   }
   if ((thisb ^ lastb) & 0x20) //cn7
   {
@@ -943,7 +941,7 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NO
     if (!(thisb & 0x20))
       risingtime[5]=now;
     else if(ram.spe.b.b13)
-      servoPos[13]=((now>risingtime[5]) ? now-risingtime[5] : (0xffffffff - risingtime[5]) + now)*20;
+      servoPos[13]=((now>risingtime[5]) ? now-risingtime[5] : (0xffffffff - risingtime[5]) + now) >> 1;
   }
   if ((thisb ^ lastb) & 0x8000) //cn12
   {
@@ -951,7 +949,7 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NO
     if (!(thisb & 0x8000))
       risingtime[6]=now;
     else if(ram.spe.b.b14)
-      servoPos[14]=((now>risingtime[6]) ? now-risingtime[6] : (0xffffffff - risingtime[6]) + now)*20;
+      servoPos[14]=((now>risingtime[6]) ? now-risingtime[6] : (0xffffffff - risingtime[6]) + now) >> 1;
   }
  if ((thisd ^ lastd) & 0x40) //cn15
   {
@@ -959,7 +957,8 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NO
     if (!(thisd & 0x40))
       risingtime[7]=now;
     else if(ram.spe.b.b15)
-      servoPos[15]=((now>risingtime[7]) ? now-risingtime[7] : (0xffffffff - risingtime[7]) + now)*20;
+      //servoPos[15]= (now-risingtime[7]) >> 1;
+      servoPos[15]=((now>risingtime[7]) ? (now-risingtime[7]) : (0xffffffff - risingtime[7]) + now) >> 1;
   }
   lastb = thisb; // Read PORTB to clear mismatch condition
   lastd = thisd; // Read PORTD to clear mismatch condition
