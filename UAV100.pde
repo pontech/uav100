@@ -85,7 +85,7 @@ us8 gyro_cs = 26;
 us8 GyroScroll = 0;
 us8 gpsraw = 0;
 us32 gnow;
-
+us32 servoPos15;
 //HardwareSerial& MySerial=Serial0;
 USBSerial& MySerial=Serial;
 
@@ -147,7 +147,7 @@ void setup()
   CNPUE= 0x00000000; //weak pull up off
   value = PORTB;      //Read the Ports
   value = PORTD;
-  IPC6SET = 0x00060000;//0x00060000; //0x001f0000;//set priority to 7 sub 4
+  IPC6SET = 0x001f0000;//0x00060000; //0x001f0000;//set priority to 7 sub 4
   IFS1CLR = 0x0001; //clear the interupt flag bit
   IEC1SET= 0x0001; // Enable Change Notice interrupts
   IEC0SET = 0x10000000;   //turn intrupts on
@@ -196,16 +196,14 @@ e32 num3;
 
 void loop()
 {
+  IEC0CLR = 0x10000000;   //turn intrupts off
+  us32 nowa=gnow;
+//  IEC0SET = 0x10000000;   //turn intrupts on
+  s32 last;
   for(i=0;i<8;i++){
     //zero the values if no input for 100 ms
-    us32 nowa=ReadCoreTimer();//micros();
-    us32 last;
     last=(nowa>lastused[i]) ? nowa-lastused[i] : (0xffffffff - lastused[i]) + nowa;
-    //last = nowa-lastused[i];
-//    delay(100);
-//    MySerial.print(last,DEC);
-//    PrintCR();
-    if (last>40000000)//40=1us
+    if (((last>4000000) || (last<-4000000)) && (last != 0xffffffff))//40=1us
       servoPos[i+8]=0;
     //Copy input to output if mapped
 /*    if (mapping[i]>7)
@@ -219,8 +217,17 @@ void loop()
     }
 */
   }
+//  if (servoPos[15]==0 && servoPos15 !=0)
+//  {
+//    MySerial.print(lastused[7] - nowa,DEC);
+//    MySerial.print(", ");
+//    MySerial.print(nowa,DEC);
+//    PrintCR();
+//  }
+  IEC0SET = 0x10000000;   //turn intrupts on
+
   IEC0CLR = 0x10000000;   //turn intrupts off
-  us32 servoPos15=servoPos[15];
+  servoPos15=servoPos[15];
   IEC0SET = 0x10000000;   //turn intrupts on
   
   if (ram.pivotstate == 0)
@@ -630,16 +637,19 @@ void loop()
           MySerial.print(gpsraw,DEC);
           PrintCR();
         }
-        else if( tokpars.compare("A") ) {
-          us32 nowa=micros();
-          us32 last;
-          last=(nowa>lastused[7]) ? nowa-lastused[7] : (0xffffffff - lastused[7]) + nowa;
+        if( tokpars.compare("A") ) {
+          IEC0CLR = 0x10000000;   //turn intrupts off
+          us32 nowa=gnow;
+          us32 lasta;
+//          lasta=nowa-lastused[7];
+          lasta=(nowa>lastused[7]) ? nowa-lastused[7] : (0xffffffff - lastused[7]) + nowa;
+          IEC0SET = 0x10000000;   //turn intrupts on
 
           MySerial.print(nowa,DEC);
           MySerial.print(", ");
           MySerial.print(servoPos15,DEC);
           MySerial.print(", ");
-          MySerial.print(last,DEC);
+          MySerial.print(lasta,DEC);
           
           PrintCR();
         }
@@ -667,8 +677,13 @@ void loop()
   
         if( tokpars.compare("TIMES") ) {
           for(i=0;i<16;i++) {
-          MySerial.print(servoPos[i],DEC);
+            MySerial.print(servoPos[i],DEC);
+            PrintCR();
+          }
           PrintCR();
+          for(i=0;i<8;i++) {
+            MySerial.print(lastused[i],DEC);
+            PrintCR();
           }
         }
       }
@@ -865,6 +880,9 @@ static volatile byte servoNum = 0;  // Cycles through servos
 // this way for quick and easy implementation.
 void __ISR(_TIMER_3_VECTOR,ipl3) pwmOn(void)
 {
+  IEC0CLR = 0x10000000;   //turn intrupts off
+  gnow = ReadCoreTimer();
+  IEC0SET = 0x10000000;   //turn intrupts on
   mT3ClearIntFlag();  // Clear interrupt flag
   if(servoPos[mapping[servoNum]] > 0 && servoOnOff[servoNum] == 1 ) {
     digitalWrite(servoPin[servoNum], HIGH);
@@ -884,10 +902,10 @@ void __ISR(_OUTPUT_COMPARE_1_VECTOR,ipl3) pwmOff(void)
   if(++servoNum > 7) servoNum = 0;  // Back to start
 }
 
-void __ISR(_CHANGE_NOTICE_VECTOR, ipl1) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
+void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
 {
-//  bool temp = digitalRead(43);
-//  digitalWrite(43, temp ^ 1);
+//  bool temp = digitalRead(80);
+//  digitalWrite(80, temp ^ 1);
   
   us16 static lastb;
   us16 static lastd;
@@ -895,6 +913,7 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl1) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NO
   us16 thisd = PORTD;
   us32 now;
   now = ReadCoreTimer();
+  gnow = now;
   if ((thisb ^ lastb) & 0x01)  //cn2
   {
     lastused[0]=now;
@@ -956,7 +975,7 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl1) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NO
     lastused[7]=now;
     if (!(thisd & 0x40))
       risingtime[7]=now;
-    else if(ram.spe.b.b15)
+    else //if(ram.spe.b.b15)
       //servoPos[15]= (now-risingtime[7]) >> 1;
       servoPos[15]=((now>risingtime[7]) ? (now-risingtime[7]) : (0xffffffff - risingtime[7]) + now) >> 1;
   }
