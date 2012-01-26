@@ -5,7 +5,7 @@
 #include <EEPROM.h>
 #include <HardwareSerial.h>
 #include <SPI.h>
-//#define WantNewLine // todo: 2 comment out before finalized
+#define WantNewLine // todo: 2 comment out before finalized
 #define s8 signed char
 #define s16 signed short int
 #define s32 signed long
@@ -83,13 +83,13 @@ hilow16 gyro_z;
 us8 gyro_cs = 26;
 us8 GyroScroll = 0;
 us8 gpsraw = 0;
-HardwareSerial& MySerial=Serial0;
-//USBSerial& MySerial=Serial;
+//HardwareSerial& MySerial=Serial0;
+USBSerial& MySerial=Serial;
 
 void setup()
 {
   TurnOffSecondaryOscillator();
-  eeprom_out(0,(us32*)&ram,sizeof(ram)); //get structure from memory
+  eeprom_out(0,(us8*)&ram,sizeof(ram)); //get structure from memory
   if (ram.structend != 42)
     set_default_ram();
   // Enable output pins for servos
@@ -104,9 +104,9 @@ void setup()
   }
   memcpy(servoPos,ram.servoPos,sizeof(servoPos));
   memcpy(mapping,ram.mapping,sizeof(mapping));
-  for(i=0;i<7;i++){ //todo: 2 fix memory //map for inputs to outputs
-    ram.mapping[i]=i+8;
-  }
+//  for(i=0;i<7;i++){ //todo: 2 fix memory //map for inputs to outputs
+//    ram.mapping[i]=i+8;
+//  }
   MySerial.begin(ram.bitrate);
   Serial1.begin(9600);
 
@@ -136,7 +136,8 @@ void setup()
   us16 value; //code for Change Notice interrupts
   TRISBSET = 0x803f;
   TRISDSET = 0x20;
-  IEC0CLR = 0x10000000;   //turn intrupts off
+  asm volatile("di");
+  //IEC0CLR = 0x10000000;   //turn intrupts off
   AD1PCFGSET = 0x0000803c;     //turn analog 2-5,15 off 0x0000403c
   AD1CON2CLR = 0x0000d000; //turn off external voltage compare pins?
   CNCON = 0x00008000;   //turn "interrupt on change" on
@@ -147,7 +148,8 @@ void setup()
   IPC6SET = 0x001f0000;//set priority to 7 sub 4 0x00060000 for priority 1 sub 0
   IFS1CLR = 0x0001; //clear the interupt flag bit
   IEC1SET= 0x0001; // Enable Change Notice interrupts
-  IEC0SET = 0x10000000;   //turn intrupts on
+  asm volatile("ei");
+//  IEC0SET = 0x10000000;   //turn intrupts on
   pinMode(17, INPUT);
   pinMode(16, INPUT);
   pinMode(29, INPUT);
@@ -168,6 +170,7 @@ void setup()
   pinMode(25,OUTPUT);
   digitalWrite(25,HIGH);
   SPI.begin();
+  IEC1SET= 0x0001; // Enable Change Notice interrupts
   SPI.setDataMode(0x40);
   pinMode(gyro_cs, OUTPUT);
   digitalWrite(gyro_cs,HIGH);
@@ -193,7 +196,7 @@ e32 num3;
 
 void loop()
 {
-  IEC0CLR = 0x10000000;   //turn intrupts off
+  IEC1CLR= 0x0001; // Disable Change Notice interrupts
   us32 nowa=ReadCoreTimer();
   s32 last;
   for(i=0;i<8;i++){ //zero the values if no input for 100 ms
@@ -202,7 +205,7 @@ void loop()
       servoPos[i+8]=0;
   }
   us32 servoPos15=servoPos[15];
-  IEC0SET = 0x10000000;   //turn intrupts on
+  IEC1SET= 0x0001; // Enable Change Notice interrupts
   
   if (ram.pivotstate == 0)
     pivot_this = digitalRead(servoPin[15]);
@@ -212,11 +215,11 @@ void loop()
     pivot_last = pivot_this;
     if (pivot_this == 1) {
       SSD();
-      digitalWrite(80,HIGH);
+//      digitalWrite(80,HIGH);
     }
     else if(pivot_this == 0) {
       SRS();
-      digitalWrite(80,LOW);
+//      digitalWrite(80,LOW);
     }
   }
   if (GyroScroll != 0){
@@ -300,10 +303,10 @@ void loop()
           PrintCR();
         }
         else if( tokpars.compare("WSS") ) {
-          eeprom_in((us32*)&ram,0,sizeof(ram));
+          eeprom_in((us8*)&ram,0,sizeof(ram));
         }
         else if( tokpars.compare("RSS") ) {
-          eeprom_out(0,(us32*)&ram,sizeof(ram));
+          eeprom_out(0,(us8*)&ram,sizeof(ram));
           MySerial.end();
           MySerial.begin(ram.bitrate);
           active=false;
@@ -360,9 +363,9 @@ void loop()
           {
             tokpars.advanceTail(1);
             num1 = tokpars.to_e16();
-            IEC0CLR = 0x10000000;   //turn intrupts off so interupt can't change value while it is printing
+            IEC1CLR= 0x0001; // Disable Change Notice interrupts so interupt can't change value while it is printing
             MySerial.print(servoPos[mapping[num1.value]]/2,DEC);
-            IEC0SET = 0x10000000;   //turn intrupts on
+            IEC1SET= 0x0001; // Enable Change Notice interrupts
             PrintCR();
           }
           else
@@ -539,6 +542,32 @@ void loop()
             PrintCR();
           }
         }
+        else if( tokpars.compare("A") ) {
+          MySerial.print(CNCON,HEX);
+          MySerial.print(", ");
+          MySerial.print(CNEN,HEX);
+          MySerial.print(", ");
+          MySerial.print(CNPUE,HEX);
+          MySerial.print(", ");
+          MySerial.print(IPC6,HEX);
+          MySerial.print(", ");
+          MySerial.print(IFS1,HEX);
+          MySerial.print(", ");
+          MySerial.print(IEC1,HEX);
+          PrintCR();
+//  CNCON = 0x00008000;   //turn "interrupt on change" on
+//  CNEN = 0x000090fc;   //enable cn2-7,12,15
+//  CNPUE= 0x00000000; //weak pull up off
+//  IPC6SET = 0x001f0000;//set priority to 7 sub 4 0x00060000 for priority 1 sub 0
+//  IFS1CLR = 0x0001; //clear the interupt flag bit
+//  IEC1SET= 0x0001; // Enable Change Notice interrupts
+
+        }
+        else if( tokpars.compare("B") ) {
+          IEC1SET= 0x0001; // Enable Change Notice interrupts
+
+        }
+
       }
     }
   }
@@ -629,15 +658,15 @@ void PrintCR() {
   #endif
 }
 
-void eeprom_in(us32* Data,us16 eeprom_adress,us16 bytes) {
+void eeprom_in(us8* Data,us16 eeprom_adress,us16 bytes) {
   int i;
-  for(i=0;i<bytes/4;i++){
+  for(i=0;i<bytes;i++){
     EEPROM.write(eeprom_adress++, *Data++);
   }
 }
-void eeprom_out(us16 eeprom_adress,us32* Data,us16 bytes) {
+void eeprom_out(us16 eeprom_adress,us8* Data,us16 bytes) {
   int i;
-  for(i=0;i<bytes/4;i++){
+  for(i=0;i<bytes;i++){
     *(Data++) = EEPROM.read(eeprom_adress++);
   }
 }
@@ -722,13 +751,13 @@ static volatile byte servoNum = 0;  // Cycles through servos
 // this way for quick and easy implementation.
 void __ISR(_TIMER_3_VECTOR,ipl3) pwmOn(void)
 {
-  IEC0CLR = 0x10000000;   //turn intrupts off
+  IEC1CLR= 0x0001; // Disable Change Notice interrupts
   mT3ClearIntFlag();  // Clear interrupt flag
   if(servoPos[mapping[servoNum]] > 0 && servoOnOff[servoNum] == 1 ) {
     digitalWrite(servoPin[servoNum], HIGH);
     SetDCOC1PWM(servoPos[mapping[servoNum]]);
   }
-  IEC0SET = 0x10000000;   //turn intrupts on
+  IEC1SET= 0x0001; // Enable Change Notice interrupts
 }
 
 // This is the output compare interrupt, also invoked 400
@@ -745,7 +774,8 @@ void __ISR(_OUTPUT_COMPARE_1_VECTOR,ipl3) pwmOff(void)
 
 void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
 {
-  us16 static lastb;
+  bool temp = digitalRead(80);
+  digitalWrite(80, temp ^ 1);  us16 static lastb;
   us16 static lastd;
   us16 thisb = PORTB;
   us16 thisd = PORTD;
