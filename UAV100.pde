@@ -5,7 +5,7 @@
 #include <EEPROM.h>
 #include <HardwareSerial.h>
 #include <SPI.h>
-#define WantNewLine // todo: 2 comment out before finalized
+//#define WantNewLine // todo: 2 comment out before finalized
 #define s8 signed char
 #define s16 signed short int
 #define s32 signed long
@@ -83,8 +83,8 @@ hilow16 gyro_z;
 us8 gyro_cs = 26;
 us8 GyroScroll = 0;
 us8 gpsraw = 0;
-//HardwareSerial& MySerial=Serial0;
-USBSerial& MySerial=Serial;
+HardwareSerial& MySerial=Serial0;
+//USBSerial& MySerial=Serial;
 
 void setup()
 {
@@ -170,7 +170,7 @@ void setup()
   pinMode(25,OUTPUT);
   digitalWrite(25,HIGH);
   SPI.begin();
-  IEC1SET= 0x0001; // Enable Change Notice interrupts
+  IEC1SET= 0x0001; // Enable Change Notice interrupts//Spi.begin disables it :(
   SPI.setDataMode(0x40);
   pinMode(gyro_cs, OUTPUT);
   digitalWrite(gyro_cs,HIGH);
