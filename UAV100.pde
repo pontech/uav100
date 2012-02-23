@@ -106,9 +106,9 @@ void setup()
   }
   memcpy(servoPos,ram.servoPos,sizeof(servoPos));
   memcpy(mapping,ram.mapping,sizeof(mapping));
-//  for(i=0;i<7;i++){ //todo: 2 fix memory //map for inputs to outputs
-//    ram.mapping[i]=i+8;
-//  }
+  for(i=0;i<7;i++){ //todo: 2 fix memory //map for inputs to outputs
+    ram.mapping[i]=i+8;
+  }
   MySerial.begin(ram.bitrate);
   Serial1.begin(9600);
 
@@ -334,7 +334,7 @@ void loop()
           memcpy(mapping,ram.mapping,sizeof(mapping));
         }
         else if( tokpars.compare("V?",'|') ) {
-          MySerial.print("UAV100 Version 0.5 2012.02.17.19.00");
+          MySerial.print("UAV100 Version 0.55 2012.02.22.20.36");
           PrintCR();
         }
         else if( tokpars.compare("?",'|') ) {
