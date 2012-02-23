@@ -83,6 +83,8 @@ hilow16 gyro_z;
 us8 gyro_cs = 26;
 us8 GyroScroll = 0;
 us8 gpsraw = 0;
+us8 LD1 = 80;
+us8 LD2 = 83;
 HardwareSerial& MySerial=Serial0;
 //USBSerial& MySerial=Serial;
 
@@ -110,7 +112,6 @@ void setup()
   MySerial.begin(ram.bitrate);
   Serial1.begin(9600);
 
-  pinMode(102, OUTPUT);
 
   // Initialize timer to 400 Hz (50 Hz * 8 servos)
 #ifdef EXTRA_RES
@@ -152,19 +153,21 @@ void setup()
 //  IEC0SET = 0x10000000;   //turn intrupts on
   pinMode(17, INPUT);
   pinMode(16, INPUT);
+  pinMode(21, INPUT);
   pinMode(29, INPUT);
   pinMode(54, INPUT);
-  pinMode(80, OUTPUT);
-  pinMode(102, OUTPUT);
-  digitalWrite(102,LOW);
+  pinMode(LD1, OUTPUT);
+  pinMode(LD2, OUTPUT);
+  digitalWrite(LD2,LOW);
 
   TRISBCLR = 0x3000; //code for relay driver
   TRISCCLR = 0x2000;
   TRISDCLR = 0x01;
   PORTBCLR = 0x3000;
   PORTCCLR = 0x2000;
-  PORTDCLR = 0x01;
+  PORTDCLR = 0x02; //0x01;
   pinMode(48, OUTPUT);
+  pinMode(49, OUTPUT);
   
   //gyro setup
   pinMode(25,OUTPUT);
@@ -187,7 +190,6 @@ void setup()
   SPI.transfer(0x6b);//Power Managment 1
   SPI.transfer(0x01);//clock x gyro,temp enabled,cycle off,sleep off,reset off
   digitalWrite(gyro_cs,HIGH);
-
 }
 
 e16 num1;//temporary values to parse into
@@ -215,11 +217,11 @@ void loop()
     pivot_last = pivot_this;
     if (pivot_this == 1) {
       SSD();
-//      digitalWrite(80,HIGH);
+      digitalWrite(LD1,HIGH);
     }
     else if(pivot_this == 0) {
       SRS();
-//      digitalWrite(80,LOW);
+      digitalWrite(LD1,LOW);
     }
   }
   if (GyroScroll != 0){
@@ -332,7 +334,7 @@ void loop()
           memcpy(mapping,ram.mapping,sizeof(mapping));
         }
         else if( tokpars.compare("V?",'|') ) {
-          MySerial.print("UAV100 Version 0.4 2012.01.20.12.30");
+          MySerial.print("UAV100 Version 0.5 2012.02.17.19.00");
           PrintCR();
         }
         else if( tokpars.compare("?",'|') ) {
@@ -501,9 +503,9 @@ void loop()
           else if(num1.value == 3)
           {
             if (num2.value == 0)
-              PORTDCLR = 0x01;
+              PORTDCLR = 0x02; //0x01;
                 else
-              PORTDSET = 0x01;
+              PORTDSET = 0x02; //0x01;
           }
         }
         else if( tokpars.compare("PIVOT?") ) {
@@ -511,12 +513,12 @@ void loop()
           num1 = tokpars.to_e16();
           ram.pivotstate = num1.value;
           if (ram.pivotstate == 0) {
-            digitalWrite(102,HIGH);
+            digitalWrite(LD2,HIGH);
             ram.spe.i &= ~0x8000;
           }
           else
           {
-            digitalWrite(102,LOW);
+            digitalWrite(LD2,LOW);
             ram.spe.i |= 0x8000;
           }
         }
@@ -563,11 +565,16 @@ void loop()
 //  IEC1SET= 0x0001; // Enable Change Notice interrupts
 
         }
+///*
         else if( tokpars.compare("B") ) {
-          IEC1SET= 0x0001; // Enable Change Notice interrupts
-
+          //IEC1SET= 0x0001; // Enable Change Notice interrupts
+          MySerial.print(U1OTGCON,HEX);
+          U1OTGCON = 0x00;
+          PrintCR();
+          MySerial.print(U1OTGCON,HEX);
+          PrintCR();
         }
-
+//*/
       }
     }
   }
@@ -774,8 +781,9 @@ void __ISR(_OUTPUT_COMPARE_1_VECTOR,ipl3) pwmOff(void)
 
 void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
 {
-  bool temp = digitalRead(80);
-  digitalWrite(80, temp ^ 1);  us16 static lastb;
+//  bool temp = digitalRead(80);
+//  digitalWrite(80, temp ^ 1);
+  us16 static lastb;
   us16 static lastd;
   us16 thisb = PORTB;
   us16 thisd = PORTD;
