@@ -1,3 +1,5 @@
 ***Did you remember to update v?**** 
 UAV100-2011-12-27-160423.hex	Pivot default 1 Serial usart	a656cf36e22494fefc9d556fe26890de121e4ff8
 UAV100-2012-01-03-1230.hex	Pivot default 1 Serial USB	f1e68022600efce7c966f67cda15e5bfb86dae71
+UAV100-2012-02-22-2036.hex	Hard code mapping
+UAV100-2012-02-24-1150.hex	Added SSP command (removed Hardcode Mapping) 
