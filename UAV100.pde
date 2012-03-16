@@ -32,6 +32,7 @@ typedef struct {
   us8 board;
   us8 pivotstate;
   us8 structend;
+  us8 MPGmode;
 } ram_struct;
 // Uses one or two timers, output compare and interrupts
 // to achieve better than 14-bit resolution with 8 servos
@@ -85,6 +86,9 @@ us8 GyroScroll = 0;
 us8 gpsraw = 0;
 us8 LD1 = 80;
 us8 LD2 = 83;
+volatile s32 MPGpos = 0;
+volatile us8 MPGchanged = 0;
+s8 MPGdir = 0; //-1 decreasing 1 increasing
 HardwareSerial& MySerial=Serial0;
 //USBSerial& MySerial=Serial;
 
@@ -334,7 +338,7 @@ void loop()
           memcpy(mapping,ram.mapping,sizeof(mapping));
         }
         else if( tokpars.compare("V?",'|') ) {
-          MySerial.print("UAV100 Version 0.6 2012.02.24.11.50");
+          MySerial.print("UAV100 Version 0.65 2012.03.16.15.00");
           PrintCR();
         }
         else if( tokpars.compare("?",'|') ) {
@@ -551,7 +555,7 @@ void loop()
             PrintCR();
           }
         }
-        else if( tokpars.compare("A") ) {
+        else if( tokpars.compare("AAAAAA") ) {
           MySerial.print(CNCON,HEX);
           MySerial.print(", ");
           MySerial.print(CNEN,HEX);
@@ -564,16 +568,8 @@ void loop()
           MySerial.print(", ");
           MySerial.print(IEC1,HEX);
           PrintCR();
-//  CNCON = 0x00008000;   //turn "interrupt on change" on
-//  CNEN = 0x000090fc;   //enable cn2-7,12,15
-//  CNPUE= 0x00000000; //weak pull up off
-//  IPC6SET = 0x001f0000;//set priority to 7 sub 4 0x00060000 for priority 1 sub 0
-//  IFS1CLR = 0x0001; //clear the interupt flag bit
-//  IEC1SET= 0x0001; // Enable Change Notice interrupts
-
         }
-///*
-        else if( tokpars.compare("B") ) {
+        else if( tokpars.compare("BBBBBB") ) {
           //IEC1SET= 0x0001; // Enable Change Notice interrupts
           MySerial.print(U1OTGCON,HEX);
           U1OTGCON = 0x00;
@@ -581,7 +577,32 @@ void loop()
           MySerial.print(U1OTGCON,HEX);
           PrintCR();
         }
-//*/
+        else if( tokpars.compare("EMODE") ) {
+          tokpars.advanceTail(5);
+          num1 = tokpars.to_e16();
+          ram.MPGmode = num1.value;
+        }
+        else if( tokpars.compare("EP") ) {
+          s32 temppos = MPGpos;
+          MySerial.print(temppos,DEC);
+          PrintCR();
+        }
+        else if( tokpars.compare("ET") ) {
+          s32 temppos = MPGpos;
+          us32 tempcore = ReadCoreTimer();
+          MySerial.print(temppos,DEC);
+          MySerial.print(" ");
+          MySerial.print(tempcore,DEC);
+          PrintCR();
+        }
+        else if( tokpars.compare("EZ") ) {
+          MPGpos = 0;
+        }
+        else if( tokpars.compare("ES") ) {
+          s8 tempdir = MPGdir;
+          MySerial.print(tempdir,DEC);
+          PrintCR();
+        }
       }
     }
   }
@@ -708,6 +729,7 @@ void set_default_ram() {
   else
     ram.servoPos[i] = 0;
   }
+  ram.MPGmode = 0;
 }
 void TurnOffSecondaryOscillator() {
   unsigned int dma_status;
@@ -788,29 +810,65 @@ void __ISR(_OUTPUT_COMPARE_1_VECTOR,ipl3) pwmOff(void)
 
 void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
 {
-//  bool temp = digitalRead(80);
-//  digitalWrite(80, temp ^ 1);
+//  bool temp = digitalRead(LD2);
+//  digitalWrite(LD2, temp ^ 1);
   us16 static lastb;
   us16 static lastd;
   us16 thisb = PORTB;
   us16 thisd = PORTD;
   us32 now;
   now = ReadCoreTimer();
-  if ((thisb ^ lastb) & 0x01)  //cn2
+  if (ram.MPGmode==0)
   {
-    lastused[0]=now;
-    if (!(thisb & 0x01))
-      risingtime[0]=now;
-    else if(ram.spe.b.b8)
-      servoPos[8]=((now>risingtime[0]) ? now-risingtime[0] : (0xffffffff - risingtime[0]) + now) >> 1;
+    if ((thisb ^ lastb) & 0x01)  //cn2
+    {
+      lastused[0]=now;
+      if (!(thisb & 0x01))
+        risingtime[0]=now;
+      else if(ram.spe.b.b8)
+        servoPos[8]=((now>risingtime[0]) ? now-risingtime[0] : (0xffffffff - risingtime[0]) + now) >> 1;
+    }
+    if ((thisb ^ lastb) & 0x02) //cn3
+    {
+      lastused[1]=now;
+      if (!(thisb & 0x02))
+        risingtime[1]=now;
+      else if(ram.spe.b.b9)
+        servoPos[9]=((now>risingtime[1]) ? now-risingtime[1] : (0xffffffff - risingtime[1]) + now) >> 1;
+    }
   }
-  if ((thisb ^ lastb) & 0x02) //cn3
+  else
   {
-    lastused[1]=now;
-    if (!(thisb & 0x02))
-      risingtime[1]=now;
-    else if(ram.spe.b.b9)
-      servoPos[9]=((now>risingtime[1]) ? now-risingtime[1] : (0xffffffff - risingtime[1]) + now) >> 1;
+    if ((thisb ^ lastb) & 0x01)  //cn2
+    {
+      MPGchanged=1;
+      if (PORTB & 0x01) 
+      {
+        if (PORTB & 0x02)
+        {
+          MPGpos--;
+          MPGdir = 0;
+        }
+        else
+        {
+          MPGpos++;
+          MPGdir = 1;
+        }
+      }
+      else
+      {
+        if (PORTB & 0x02)
+        {
+          MPGpos++;
+          MPGdir = 1;
+        }
+        else
+        {
+          MPGpos--;
+          MPGdir = 0;
+        }
+      }
+    }    
   }
   if ((thisb ^ lastb) & 0x04) //cn4
   {
