@@ -370,8 +370,9 @@ void loop()
             tokpars.advanceTail(1);
             num1 = tokpars.to_e16();
             IEC1CLR= 0x0001; // Disable Change Notice interrupts so interupt can't change value while it is printing
-            MySerial.print(servoPos[mapping[num1.value]]/2,DEC);
+            num2.value = servoPos[mapping[num1.value]]/2;
             IEC1SET= 0x0001; // Enable Change Notice interrupts
+            MySerial.print(num2.value,DEC);
             PrintCR();
           }
           else
