@@ -1,0 +1,44 @@
+BDn	n activates board with number n
+BD?	Return current boards number
+IDn	n is the boards new ID
+ID?	Return current boards number
+BRn	n is new bit rate for serial comunication
+WEn m	Write EEPROM n address  m value
+REn	Read EEPROM n address
+WSS	Write System Settings to EEPROM
+RSS	Read System Settings from EEPROM
+DSS	Default System Settings
+V?	Firmware Version
+?	Help
+SVn	n current sero to write to
+Mn	n position to move servo to
+M?n	current position of sero n (includes inputs)
+In	increment current servo n units
+SSD	Servo Mapping Default 0 to 0, 1 to 1, ..., 15 to 15
+SSR	Copy Servo Mapping to Ram
+SSM	Show Current Mapping
+SSP	Maps Input to Outputs 8 to 0, 9 to 1, ..., 14 to 6 
+SSn m	Maps Servo n to position m
+SRS	Copy Ram to Servo Mapping
+CSR	Copy Servo positions to ram
+CRS	Copy Ram to Servo Positions
+SPEn	used to Enable or disable servos
+SPE?	Read Current Value
+PSn	Sets Servo Out n to High (When disabled using SPE)
+PCn	Sets Servo Out n to Low (When disabled using SPE)
+PTN	Sets Servo Out n to Oposite is current value (When disabled using SPE)
+RP?n	Reads the Input value at pin n
+SLUn	Sets the Upper soft limit to n
+SLLn	Sets the Lower soft limit to n
+RLYn m	Sets Relay n to value m
+PIVOTn	Determines if the switchover between Remote and autonomous control uses servo value (1) or ttl (0)
+GYROSCROLL	Toggles the printing continuous Gyroscope vaules
+GYROSINGLE	Prints a single Gyroscope value
+GPSRAW	would cause it to print the information from the gps as it came in if it was not commented out
+TIMES	Prints the current values for the servos*2 (the way the are stored internally) and the last time the inputs were used
+EMODEn	Controls if inputs 8 and 9 are used for encoder input (1) instead of servos (0)
+EP	print encoder value
+ET	print encoder value and Coretimer (40 mega hertz clock)
+EZ	Zeros the encoder value
+ES	print last encoder direction increasing (1) or decreasing (0)
+ 

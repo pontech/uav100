@@ -1,0 +1,7 @@
+UAV100-2012-03-16-1500
+V6.5
+New commands:
+EMODEn:	n=1 or 0. 1 enables encoder mode on inputs 8 and 9. 8 is A 9 is B. 0 is normal inputs.
+EP:	Read encoder position
+ET:	Read encoder position and coretimer
+ES:	Returns 1 (last encoder move was positive) or 0 (last move was negative)
