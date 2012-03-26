@@ -1,0 +1,9 @@
+UAV100-2012-03-26-1400
+V6.6
+New commands:
+DUTYn	Returns Duty Cycle of signal on pin n
+PERIODn	Returns period of signal on pin n
+FREQn	Returns frequency of signal on pin n
+
+Change:
+Commands can end with "carriage return new line"(\r\n) without breaking the parser

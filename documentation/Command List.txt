@@ -41,4 +41,6 @@ EP	print encoder value
 ET	print encoder value and Coretimer (40 mega hertz clock)
 EZ	Zeros the encoder value
 ES	print last encoder direction increasing (1) or decreasing (0)
- 
+DUTYn	Returns Duty Cycle of signal on pin n
+PERIODn	Returns period of signal on pin n
+FREQn	Returns frequency of signal on pin n

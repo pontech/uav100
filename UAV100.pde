@@ -57,7 +57,10 @@ typedef struct {
 us8 servoPin[16] = { 64, 65, 66, 67, 68, 69, 70, 71, 16, 17, 18, 19, 20, 21, 31, 54}; //servo in and out pins
 us8 servoOnOff[16] = { 1, 1, 1, 1, 1, 1, 1, 1}; //sets the servo outs to be off or on
 us32 risingtime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track risetimes
-us32 intime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //time value was high
+us32 timehigh[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track hightimes
+us32 period[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+float dutycycle[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //store dutycycles
+//us32 intime[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //time value was high
 us32 lastused[8] = { 0, 0, 0, 0, 0, 0, 0, 0 }; //track last time a value was captured
 ram_struct ram;
 GPS_INFO gps_data;
@@ -238,7 +241,10 @@ void loop()
     if( ctr < sizeof(buff)) {
       buff[ctr++] = ch;
     }
- 
+    if (ch == '\n')
+    {
+      buff[ctr-1] = ' ';
+    } 
     if (ch == '\r')
     {
       buff[ctr-1] = ' ';
@@ -338,7 +344,7 @@ void loop()
           memcpy(mapping,ram.mapping,sizeof(mapping));
         }
         else if( tokpars.compare("V?",'|') ) {
-          MySerial.print("UAV100 Version 0.65 2012.03.16.15.00");
+          MySerial.print("UAV100 Version 0.66 2012.03.26.14.00");
           PrintCR();
         }
         else if( tokpars.compare("?",'|') ) {
@@ -370,9 +376,9 @@ void loop()
             tokpars.advanceTail(1);
             num1 = tokpars.to_e16();
             IEC1CLR= 0x0001; // Disable Change Notice interrupts so interupt can't change value while it is printing
-            num2.value = servoPos[mapping[num1.value]]/2;
+            num3.value = servoPos[mapping[num1.value]]/2;
             IEC1SET= 0x0001; // Enable Change Notice interrupts
-            MySerial.print(num2.value,DEC);
+            MySerial.print(num3.value,DEC);
             PrintCR();
           }
           else
@@ -578,7 +584,7 @@ void loop()
           MySerial.print(U1OTGCON,HEX);
           PrintCR();
         }
-        else if( tokpars.compare("EMODE") ) {
+        else if( tokpars.compare("EMODE?") ) {
           tokpars.advanceTail(5);
           num1 = tokpars.to_e16();
           ram.MPGmode = num1.value;
@@ -602,6 +608,33 @@ void loop()
         else if( tokpars.compare("ES") ) {
           s8 tempdir = MPGdir;
           MySerial.print(tempdir,DEC);
+          PrintCR();
+        }
+        else if( tokpars.compare("DUTY?") ) {
+          tokpars.advanceTail(4);
+          num1 = tokpars.to_e16();
+          IEC1CLR= 0x0001; // Disable Change Notice interrupts so interupt can't change value
+          float temp = dutycycle[num1.value-8];
+          IEC1SET= 0x0001; // Enable Change Notice interrupts
+          MySerial.print(temp*100,2);
+          PrintCR();
+        }
+        else if( tokpars.compare("PERIOD?") ) {
+          tokpars.advanceTail(6);
+          num1 = tokpars.to_e16();
+          IEC1CLR= 0x0001; // Disable Change Notice interrupts so interupt can't change value
+          num3.value = period[num1.value-8];
+          IEC1SET= 0x0001; // Enable Change Notice interrupts
+          MySerial.print(num3.value/40,DEC);
+          PrintCR();
+        }
+        else if( tokpars.compare("FREQ?") ) {
+          tokpars.advanceTail(4);
+          num1 = tokpars.to_e16();
+          IEC1CLR= 0x0001; // Disable Change Notice interrupts so interupt can't change value
+          num3.value = period[num1.value-8];
+          IEC1SET= 0x0001; // Enable Change Notice interrupts
+          MySerial.print((40000000/(float)num3.value),2);//MySerial.print(1/((float)num3.value/40/1000000),2);
           PrintCR();
         }
       }
@@ -817,6 +850,7 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NO
   us16 static lastd;
   us16 thisb = PORTB;
   us16 thisd = PORTD;
+  us32 totalcycle;
   us32 now;
   now = ReadCoreTimer();
   if (ram.MPGmode==0)
@@ -825,17 +859,31 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NO
     {
       lastused[0]=now;
       if (!(thisb & 0x01))
+      {
+        period[0] = (now>risingtime[0]) ? now-risingtime[0] : (0xffffffff - risingtime[0]) + now;
+        dutycycle[0] = ((float)timehigh[0])/((float)period[0]);
         risingtime[0]=now;
+      }
       else if(ram.spe.b.b8)
-        servoPos[8]=((now>risingtime[0]) ? now-risingtime[0] : (0xffffffff - risingtime[0]) + now) >> 1;
+      {
+        timehigh[0] = ((now>risingtime[0]) ? now-risingtime[0] : (0xffffffff - risingtime[0]) + now);
+        servoPos[8]=timehigh[0] >> 1;
+      }
     }
     if ((thisb ^ lastb) & 0x02) //cn3
     {
       lastused[1]=now;
       if (!(thisb & 0x02))
+      {
+        period[1] = (now>risingtime[1]) ? now-risingtime[1] : (0xffffffff - risingtime[1]) + now;
+        dutycycle[1] = ((float)timehigh[1])/((float)period[1]);
         risingtime[1]=now;
+      }
       else if(ram.spe.b.b9)
-        servoPos[9]=((now>risingtime[1]) ? now-risingtime[1] : (0xffffffff - risingtime[1]) + now) >> 1;
+      {
+        timehigh[1] = ((now>risingtime[1]) ? now-risingtime[1] : (0xffffffff - risingtime[1]) + now);
+        servoPos[9]=timehigh[1] >> 1;
+      }
     }
   }
   else
@@ -875,49 +923,90 @@ void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NO
   {
     lastused[2]=now;
     if (!(thisb & 0x04)) //cn4
+    {
+      period[2] = (now>risingtime[2]) ? now-risingtime[2] : (0xffffffff - risingtime[2]) + now;
+      dutycycle[2] = ((float)timehigh[2])/((float)period[2]);
       risingtime[2]=now;
+    }
     else if(ram.spe.b.b10)
-      servoPos[10]=((now>risingtime[2]) ? now-risingtime[2] : (0xffffffff - risingtime[2]) + now) >> 1;
+    {
+      timehigh[2] = ((now>risingtime[2]) ? now-risingtime[2] : (0xffffffff - risingtime[2]) + now);
+      servoPos[10]=timehigh[2] >> 1;
+    }
   }
   if ((thisb ^ lastb) & 0x08) //cn5
   {
     lastused[3]=now;
     if (!(thisb & 0x08))
-      risingtime[3]=now;
+    {
+      period[3] = (now>risingtime[3]) ? now-risingtime[3] : (0xffffffff - risingtime[3]) + now;
+      dutycycle[3] = ((float)timehigh[3])/((float)period[3]);
+      risingtime[3]=now;    }
     else if(ram.spe.b.b11)
-      servoPos[11]=((now>risingtime[3]) ? now-risingtime[3] : (0xffffffff - risingtime[3]) + now) >> 1;
+    {
+      timehigh[3] = ((now>risingtime[3]) ? now-risingtime[3] : (0xffffffff - risingtime[3]) + now);
+      servoPos[11]=timehigh[3] >> 1;
+    }
   }
   if ((thisb ^ lastb) & 0x10) //cn6
   {
     lastused[4]=now;
     if (!(thisb & 0x10))
+    {
+      period[4] = (now>risingtime[4]) ? now-risingtime[4] : (0xffffffff - risingtime[4]) + now;
+      dutycycle[4] = ((float)timehigh[4])/((float)period[4]);
       risingtime[4]=now;
+    }
     else  if(ram.spe.b.b12)
-      servoPos[12]=((now>risingtime[4]) ? now-risingtime[4] : (0xffffffff - risingtime[4]) + now) >> 1;
+    {
+      timehigh[4] = ((now>risingtime[4]) ? now-risingtime[4] : (0xffffffff - risingtime[4]) + now);
+      servoPos[12]=timehigh[4] >> 1;
+    }
   }
   if ((thisb ^ lastb) & 0x20) //cn7
   {
     lastused[5]=now;
     if (!(thisb & 0x20))
+    {
+      period[5] = (now>risingtime[5]) ? now-risingtime[5] : (0xffffffff - risingtime[5]) + now;
+      dutycycle[5] = ((float)timehigh[5])/((float)period[5]);
       risingtime[5]=now;
+    }
     else if(ram.spe.b.b13)
-      servoPos[13]=((now>risingtime[5]) ? now-risingtime[5] : (0xffffffff - risingtime[5]) + now) >> 1;
+    {
+      timehigh[5] = ((now>risingtime[5]) ? now-risingtime[5] : (0xffffffff - risingtime[5]) + now);
+      servoPos[13]=timehigh[5] >> 1;
+    }
   }
   if ((thisb ^ lastb) & 0x8000) //cn12
   {
     lastused[6]=now;
     if (!(thisb & 0x8000))
+    {
+      period[6] = (now>risingtime[6]) ? now-risingtime[6] : (0xffffffff - risingtime[6]) + now;
+      dutycycle[6] = ((float)timehigh[6])/((float)period[6]);
       risingtime[6]=now;
+    }
     else if(ram.spe.b.b14)
-      servoPos[14]=((now>risingtime[6]) ? now-risingtime[6] : (0xffffffff - risingtime[6]) + now) >> 1;
+    {
+      timehigh[6] = ((now>risingtime[6]) ? now-risingtime[6] : (0xffffffff - risingtime[6]) + now);
+      servoPos[14]=timehigh[6] >> 1;
+    }
   }
  if ((thisd ^ lastd) & 0x40) //cn15
   {
     lastused[7]=now;
     if (!(thisd & 0x40))
+    {
+      period[7] = (now>risingtime[7]) ? now-risingtime[7] : (0xffffffff - risingtime[7]) + now;
+      dutycycle[7] = ((float)timehigh[7])/((float)period[7]);
       risingtime[7]=now;
+    }
     else if(ram.spe.b.b15)
-      servoPos[15]=((now>risingtime[7]) ? (now-risingtime[7]) : (0xffffffff - risingtime[7]) + now) >> 1;
+    {
+      timehigh[7] = ((now>risingtime[7]) ? now-risingtime[7] : (0xffffffff - risingtime[7]) + now);
+      servoPos[15]=timehigh[7] >> 1;
+    }
   }
   lastb = thisb; // Read PORTB to clear mismatch condition
   lastd = thisd; // Read PORTD to clear mismatch condition
