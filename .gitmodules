@@ -1,6 +1,6 @@
 [submodule "pic32lib"]
 	path = pic32lib
-	url = git@github.com/pontech/pic32lib.git
+	url = git@github.com:pontech/pic32lib.git
 [submodule "TokenParser"]
 	path = TokenParser
-	url = git@github.com/pontech/TokenParser.git
+	url = git@github.com:pontech/TokenParser.git
