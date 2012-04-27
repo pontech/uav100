@@ -1,6 +1,6 @@
 [submodule "pic32lib"]
 	path = pic32lib
-	url = ssh://git@pontech.dyndns.org/~/arduino/libraries/pic32lib
+	url = git@github.com:pontech/pic32lib.git
 [submodule "TokenParser"]
 	path = TokenParser
-	url = ssh://git@pontech.dyndns.org/~/arduino/libraries/TokenParser
+	url = git@github.com:pontech/TokenParser.git
