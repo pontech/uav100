@@ -345,7 +345,7 @@ void loop()
           memcpy(mapping,ram.mapping,sizeof(mapping));
         }
         else if( tokpars.compare("V?",'|') ) {
-          MySerial.print("UAV100 Version 0.67 2012.04.27.11.30");
+          MySerial.print("UAV100 Version 0.68 2012.04.27.14.30");
           PrintCR();
         }
         else if( tokpars.compare("?",'|') ) {
@@ -816,7 +816,7 @@ void GyroPrint() {
 void ServoPrint() {
   if (ServoScroll == 1)
   {
-    MySerial.print("sot");
+    MySerial.write(2);
     for(int i = 0;i<8;i++)
     {
       hilow16 value;
@@ -829,7 +829,7 @@ void ServoPrint() {
   }
   else if (ServoScroll == 2)
   {
-    MySerial.print("sot");
+    MySerial.print("2");
     for(int i = 0;i<8;i++)
     {
       hilow16 value;
@@ -840,6 +840,27 @@ void ServoPrint() {
     }
     PrintCR();
   }
+  else if (ServoScroll == 3)
+  {
+    MySerial.print("t");
+    for(int i = 0;i<8;i++)
+      print_us16(servoPos[i+8]/2);
+    PrintCR();
+  }
+  else if (ServoScroll == 4)
+  {
+    MySerial.print("d");
+    for(int i = 0;i<8;i++)
+      print_us16((us16)(dutycycle[i]*10000));
+    PrintCR();
+  }
+}
+
+void print_us16(us16 x) { //this is just to pad the value with zeros
+  if (x<0x1000) MySerial.print("0");
+  if (x<0x100) MySerial.print("0");
+  if (x<0x10) MySerial.print("0");
+  MySerial.print(x,HEX);
 }
 ///*
 extern "C"

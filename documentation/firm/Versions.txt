@@ -5,4 +5,5 @@ UAV100-2012-02-22-2036.hex	Hard code mapping
 UAV100-2012-02-24-1150.hex	Added SSP command (removed Hardcode Mapping) 131c356ab58dfc7e661af9e3b8f003b61af698bc
 UAV100-2012-03-16-1500.hex	MPG on 8-9			c6a4fa4aff42cc6bad81d21354052c9c036e9f74
 UAV100-2012-03-16-1500.hex	Duty Cycle, Frequency, and Period	beca49ba1263e267c41f8bd1de7984bafeaf1c89
-UAV100-2012-04-27-1130.hex	Send input widths or dutycycle every 20 ms command	
+UAV100-2012-04-27-1130.hex	Send input widths or dutycycle every 20 ms command	e171c2efca4c441523688d699c59dc0f3ba20e5d
+UAV100-2012-04-27-1130.hex	Added more modes for the send every 20ms	

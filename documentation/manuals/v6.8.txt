@@ -1,0 +1,6 @@
+UAV100-2012-04-27-1430
+V6.8
+changed commands:
+SERVOSCROLLn	n=0 off n=1 send ServoPositions n=2 send input dutycycles*100 both every 20ms and in binary preceded by the char 0x02
+		n=3 send Servotimes in hex preceded by "t" n=4 send input dutycycles*100 in hex preceded by "d"
+		
