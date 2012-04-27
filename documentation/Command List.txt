@@ -44,3 +44,4 @@ ES	print last encoder direction increasing (1) or decreasing (0)
 DUTYn	Returns Duty Cycle of signal on pin n
 PERIODn	Returns period of signal on pin n
 FREQn	Returns frequency of signal on pin n
+SERVOSCROLLn	n=0 off n=1 send ServoPositions n=2 send input dutycycles*100 both every 20ms and in binary preceded by "sot"

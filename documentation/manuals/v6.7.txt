@@ -1,0 +1,4 @@
+UAV100-2012-04-27-1130
+V6.7
+New commands:
+SERVOSCROLLn	n=0 off n=1 send ServoPositions n=2 send input dutycycles*100 both every 20ms and in binary preceded by "sot"

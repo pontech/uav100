@@ -86,6 +86,7 @@ hilow16 gyro_y;
 hilow16 gyro_z;
 us8 gyro_cs = 26;
 us8 GyroScroll = 0;
+us8 ServoScroll = 0;
 us8 gpsraw = 0;
 us8 LD1 = 80;
 us8 LD2 = 83;
@@ -344,7 +345,7 @@ void loop()
           memcpy(mapping,ram.mapping,sizeof(mapping));
         }
         else if( tokpars.compare("V?",'|') ) {
-          MySerial.print("UAV100 Version 0.66 2012.03.26.14.00");
+          MySerial.print("UAV100 Version 0.67 2012.04.27.11.30");
           PrintCR();
         }
         else if( tokpars.compare("?",'|') ) {
@@ -545,6 +546,13 @@ void loop()
         }
         else if( tokpars.compare("GYROSINGLE") ) {
           GyroPrint();
+        }
+        else if( tokpars.compare("SERVOSCROLL") ) {
+          tokpars.advanceTail(11);
+          num1 = tokpars.to_e16();
+          //MySerial.print(num1.value);
+          //PrintCR();
+          ServoScroll=num1.value;
         }
         else if( tokpars.compare("GPSRAW") ) {
           gpsraw=(gpsraw == 0 ? 1 : 0);
@@ -804,7 +812,34 @@ void GyroPrint() {
   MySerial.print(", ");
   MySerial.print((s16)gyro_z.val,DEC);
   PrintCR();
-
+}
+void ServoPrint() {
+  if (ServoScroll == 1)
+  {
+    MySerial.print("sot");
+    for(int i = 0;i<8;i++)
+    {
+      hilow16 value;
+      value.val = (servoPos[i+8]/2);
+      MySerial.write(value.p.u);
+      MySerial.write(value.p.l);
+      //MySerial.print(servoPos[i+8]/2,HEX);
+    }
+    PrintCR();
+  }
+  else if (ServoScroll == 2)
+  {
+    MySerial.print("sot");
+    for(int i = 0;i<8;i++)
+    {
+      hilow16 value;
+      value.val = (us16)(dutycycle[i]*10000);
+      MySerial.write(value.p.u);
+      MySerial.write(value.p.l);
+      //MySerial.print(value.val,HEX);
+    }
+    PrintCR();
+  }
 }
 ///*
 extern "C"
@@ -839,7 +874,10 @@ void __ISR(_OUTPUT_COMPARE_1_VECTOR,ipl3) pwmOff(void)
   mOC1ClearIntFlag();
   if(servoOnOff[servoNum] == 1 ) 
     digitalWrite(servoPin[servoNum], LOW);
-  if(++servoNum > 7) servoNum = 0;  // Back to start
+  if(++servoNum > 7){
+    servoNum = 0;  // Back to start
+    ServoPrint();
+  }
 }
 
 void __ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)//__ISR(_CHANGE_NOTICE_VECTOR, ipl7) CN_Interrupt_ISR(void)
