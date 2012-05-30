@@ -92,6 +92,7 @@ us8 LD1 = 80;
 us8 LD2 = 83;
 volatile s32 MPGpos = 0;
 volatile us8 MPGchanged = 0;
+volatile us8 servoneedprint = 0;
 s8 MPGdir = 0; //-1 decreasing 1 increasing
 HardwareSerial& MySerial=Serial0;
 //USBSerial& MySerial=Serial;
@@ -206,6 +207,8 @@ e32 num3;
 
 void loop()
 {
+  if (servoneedprint >0)
+    ServoPrint();//todo: set flag and print in main loop
   IEC1CLR= 0x0001; // Disable Change Notice interrupts
   us32 nowa=ReadCoreTimer();
   s32 last;
@@ -854,6 +857,7 @@ void ServoPrint() {
       print_us16((us16)(dutycycle[i]*10000));
     PrintCR();
   }
+  servoneedprint = 0;
 }
 
 void print_us16(us16 x) { //this is just to pad the value with zeros
@@ -897,7 +901,7 @@ void __ISR(_OUTPUT_COMPARE_1_VECTOR,ipl3) pwmOff(void)
     digitalWrite(servoPin[servoNum], LOW);
   if(++servoNum > 7){
     servoNum = 0;  // Back to start
-    ServoPrint();
+    servoneedprint = 1;
   }
 }
 
