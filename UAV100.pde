@@ -5,7 +5,7 @@
 #include <EEPROM.h>
 #include <HardwareSerial.h>
 #include <SPI.h>
-//#define WantNewLine // todo: 2 comment out before finalized
+#define WantNewLine // todo: 2 comment out before finalized
 #define s8 signed char
 #define s16 signed short int
 #define s32 signed long
@@ -31,8 +31,9 @@ typedef struct {
   us16 upperlimit;
   us8 board;
   us8 pivotstate;
-  us8 structend;
   us8 MPGmode;
+  us8 ServoScrollSpeed;
+  us8 structend;
 } ram_struct;
 // Uses one or two timers, output compare and interrupts
 // to achieve better than 14-bit resolution with 8 servos
@@ -94,6 +95,7 @@ volatile s32 MPGpos = 0;
 volatile us8 MPGchanged = 0;
 volatile us8 servoneedprint = 0;
 s8 MPGdir = 0; //-1 decreasing 1 increasing
+us8 ServoScrollSpeedCount = 1;
 HardwareSerial& MySerial=Serial0;
 //USBSerial& MySerial=Serial;
 
@@ -348,7 +350,7 @@ void loop()
           memcpy(mapping,ram.mapping,sizeof(mapping));
         }
         else if( tokpars.compare("V?",'|') ) {
-          MySerial.print("UAV100 Version 0.68 2012.04.27.14.30");
+          MySerial.print("UAV100 Version 0.69 2013.05.24.08.20");
           PrintCR();
         }
         else if( tokpars.compare("?",'|') ) {
@@ -549,6 +551,16 @@ void loop()
         }
         else if( tokpars.compare("GYROSINGLE") ) {
           GyroPrint();
+        }
+        else if( tokpars.compare("SERVOSCROLLSPEED") ) {
+          tokpars.advanceTail(16);
+          num1 = tokpars.to_e16();
+          //MySerial.print(num1.value);
+          //PrintCR();
+          if(num1.value>0 && num1.value<256)
+          {
+            ram.ServoScrollSpeed=num1.value;
+          }
         }
         else if( tokpars.compare("SERVOSCROLL") ) {
           tokpars.advanceTail(11);
@@ -775,6 +787,7 @@ void set_default_ram() {
     ram.servoPos[i] = 0;
   }
   ram.MPGmode = 0;
+  ram.ServoScrollSpeed = 1;
 }
 void TurnOffSecondaryOscillator() {
   unsigned int dma_status;
@@ -823,7 +836,9 @@ void ServoPrint() {
     for(int i = 0;i<8;i++)
     {
       hilow16 value;
+      IEC1CLR= 0x0001; // Disable Change Notice interrupts
       value.val = (servoPos[i+8]/2);
+      IEC1SET= 0x0001; // Enable Change Notice interrupts
       MySerial.write(value.p.u);
       MySerial.write(value.p.l);
       //MySerial.print(servoPos[i+8]/2,HEX);
@@ -836,7 +851,9 @@ void ServoPrint() {
     for(int i = 0;i<8;i++)
     {
       hilow16 value;
+      IEC1CLR= 0x0001; // Disable Change Notice interrupts
       value.val = (us16)(dutycycle[i]*10000);
+      IEC1SET= 0x0001; // Enable Change Notice interrupts
       MySerial.write(value.p.u);
       MySerial.write(value.p.l);
       //MySerial.print(value.val,HEX);
@@ -846,15 +863,27 @@ void ServoPrint() {
   else if (ServoScroll == 3)
   {
     MySerial.print("t");
+    us16 holdval;
     for(int i = 0;i<8;i++)
-      print_us16(servoPos[i+8]/2);
+    {
+      IEC1CLR= 0x0001; // Disable Change Notice interrupts
+      holdval = servoPos[i+8]/2;
+      IEC1SET= 0x0001; // Enable Change Notice interrupts
+      print_us16(holdval);
+    }
     PrintCR();
   }
   else if (ServoScroll == 4)
   {
     MySerial.print("d");
+    us16 holdval;
     for(int i = 0;i<8;i++)
-      print_us16((us16)(dutycycle[i]*10000));
+    {
+      IEC1CLR= 0x0001; // Disable Change Notice interrupts
+      holdval = (us16)(dutycycle[i]*10000);
+      IEC1SET= 0x0001; // Enable Change Notice interrupts
+      print_us16(holdval);
+    }
     PrintCR();
   }
   servoneedprint = 0;
@@ -901,7 +930,12 @@ void __ISR(_OUTPUT_COMPARE_1_VECTOR,ipl3) pwmOff(void)
     digitalWrite(servoPin[servoNum], LOW);
   if(++servoNum > 7){
     servoNum = 0;  // Back to start
-    servoneedprint = 1;
+    ServoScrollSpeedCount++;
+    if(ServoScrollSpeedCount>ram.ServoScrollSpeed)
+    {
+      servoneedprint = 1;
+      ServoScrollSpeedCount = 1;
+    }
   }
 }
 

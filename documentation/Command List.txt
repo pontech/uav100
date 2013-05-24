@@ -44,6 +44,6 @@ ES	print last encoder direction increasing (1) or decreasing (0)
 DUTYn	Returns Duty Cycle of signal on pin n
 PERIODn	Returns period of signal on pin n
 FREQn	Returns frequency of signal on pin n
-SERVOSCROLLn	n=0 off n=1 send ServoPositions n=2 send input dutycycles*100 both every 20ms and in binary preceded by the char 0x02
+SERVOSCROLLn	n=0 off n=1 send ServoPositions n=2 send input dutycycles*100 in binary preceded by the char 0x02 Speed set by SERVOSCROLLSPEED
 		n=3 send Servotimes in hex preceded by "t" n=4 send input dutycycles*100 in hex preceded by "d"
-		
+SERVOSCROLLSPEEDn	n is multiple of 20ms to wait between Sends by SERVOSCROLL Min 1 Max 255 Default 1 (50 = 1 Second) 
