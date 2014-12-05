@@ -13,6 +13,8 @@ V?	Firmware Version
 SVn	n current sero to write to
 Mn	n position to move servo to
 M?n	current position of sero n (includes inputs)
+IM?	read input mode binary values
+IMn	set input mode binary values (4 sets the third to analog input) only use with modified boards
 In	increment current servo n units
 SSD	Servo Mapping Default 0 to 0, 1 to 1, ..., 15 to 15
 SSR	Copy Servo Mapping to Ram

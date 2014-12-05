@@ -33,6 +33,7 @@ typedef struct {
   us8 pivotstate;
   us8 MPGmode;
   us8 ServoScrollSpeed;
+  us8 InputMode;
   us8 structend;
 } ram_struct;
 // Uses one or two timers, output compare and interrupts
@@ -96,8 +97,8 @@ volatile us8 MPGchanged = 0;
 volatile us8 servoneedprint = 0;
 s8 MPGdir = 0; //-1 decreasing 1 increasing
 us8 ServoScrollSpeedCount = 1;
-HardwareSerial& MySerial=Serial0;
-//USBSerial& MySerial=Serial;
+//HardwareSerial& MySerial=Serial0;
+USBSerial& MySerial=Serial;
 
 void setup()
 {
@@ -215,9 +216,16 @@ void loop()
   us32 nowa=ReadCoreTimer();
   s32 last;
   for(i=0;i<8;i++){ //zero the values if no input for 100 ms
-    last=(nowa>lastused[i]) ? nowa-lastused[i] : (0xffffffff - lastused[i]) + nowa;
-    if (((last>4000000) || (last<-4000000)) && (last != 0xffffffff))//40=1us
-      servoPos[i+8]=0;
+    if((ram.InputMode & 1<<i) == 0)
+    {
+      last=(nowa>lastused[i]) ? nowa-lastused[i] : (0xffffffff - lastused[i]) + nowa;
+      if (((last>4000000) || (last<-4000000)) && (last != 0xffffffff))//40=1us
+        servoPos[i+8]=0;
+    } else { //this sets the analog to input when mode is correct
+      servoPos[i+8] = (servo_t)(((double)ram.upperlimit-(double)ram.lowerlimit)*(double)analogRead(servoPin[i+8])/776.0+ram.lowerlimit); //776 is the portion of 1024 that the divider sets the max input to
+      //servoPos[i+8] = (servo_t)(analogRead(servoPin[i+8])+ram.lowerlimit); //776 is the portion of 1024 that the divider sets the max input to
+      servoPos[i+8] = servoPos[i+8] > ram.upperlimit ? ram.upperlimit : servoPos[i+8];
+    }
   }
   us32 servoPos15=servoPos[15];
   IEC1SET= 0x0001; // Enable Change Notice interrupts
@@ -283,7 +291,7 @@ void loop()
           if(tokpars.contains("?"))
           {
             MySerial.print(ram.board,DEC);
-            PrintCR();            
+            PrintCR();
           }
           else
           {
@@ -393,6 +401,15 @@ void loop()
             if(servo<8)  
               servoPos[servo] = num1.value*2 > ram.upperlimit ? ram.upperlimit : num1.value*2 < ram.lowerlimit ? ram.lowerlimit : num1.value*2;
           }
+        }
+        else if( tokpars.compare("IM?",'|' ) ) {
+            MySerial.print(ram.InputMode,DEC);
+            PrintCR();
+        }
+        else if( tokpars.compare("IM?" ) ) {
+            tokpars.advanceTail(2);
+            num1 = tokpars.to_e16();
+            ram.InputMode = num1.value;
         }
         else if( tokpars.compare("I?" ) ) {
           tokpars.advanceTail(1);
@@ -788,6 +805,7 @@ void set_default_ram() {
   }
   ram.MPGmode = 0;
   ram.ServoScrollSpeed = 1;
+  ram.InputMode = 0;
 }
 void TurnOffSecondaryOscillator() {
   unsigned int dma_status;
