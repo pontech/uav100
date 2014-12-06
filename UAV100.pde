@@ -5,7 +5,7 @@
 #include <EEPROM.h>
 #include <HardwareSerial.h>
 #include <SPI.h>
-#define WantNewLine // todo: 2 comment out before finalized
+//#define WantNewLine // todo: 2 comment out before finalized
 #define s8 signed char
 #define s16 signed short int
 #define s32 signed long
@@ -97,8 +97,8 @@ volatile us8 MPGchanged = 0;
 volatile us8 servoneedprint = 0;
 s8 MPGdir = 0; //-1 decreasing 1 increasing
 us8 ServoScrollSpeedCount = 1;
-//HardwareSerial& MySerial=Serial0;
-USBSerial& MySerial=Serial;
+HardwareSerial& MySerial=Serial0;
+//USBSerial& MySerial=Serial;
 
 void setup()
 {
@@ -221,10 +221,6 @@ void loop()
       last=(nowa>lastused[i]) ? nowa-lastused[i] : (0xffffffff - lastused[i]) + nowa;
       if (((last>4000000) || (last<-4000000)) && (last != 0xffffffff))//40=1us
         servoPos[i+8]=0;
-    } else { //this sets the analog to input when mode is correct
-      servoPos[i+8] = (servo_t)(((double)ram.upperlimit-(double)ram.lowerlimit)*(double)analogRead(servoPin[i+8])/776.0+ram.lowerlimit); //776 is the portion of 1024 that the divider sets the max input to
-      //servoPos[i+8] = (servo_t)(analogRead(servoPin[i+8])+ram.lowerlimit); //776 is the portion of 1024 that the divider sets the max input to
-      servoPos[i+8] = servoPos[i+8] > ram.upperlimit ? ram.upperlimit : servoPos[i+8];
     }
   }
   us32 servoPos15=servoPos[15];
@@ -358,7 +354,7 @@ void loop()
           memcpy(mapping,ram.mapping,sizeof(mapping));
         }
         else if( tokpars.compare("V?",'|') ) {
-          MySerial.print("UAV100 Version 0.69 2013.05.24.08.20");
+          MySerial.print("UAV100 Version 0.7 2014.12.05.17.04");
           PrintCR();
         }
         else if( tokpars.compare("?",'|') ) {
@@ -928,6 +924,11 @@ static volatile byte servoNum = 0;  // Cycles through servos
 // this way for quick and easy implementation.
 void __ISR(_TIMER_3_VECTOR,ipl3) pwmOn(void)
 {
+  if((ram.InputMode & 1<<servoNum) > 0)
+  {
+    servoPos[servoNum+8] = (servo_t)(((double)ram.upperlimit-(double)ram.lowerlimit)*(double)analogRead(servoPin[servoNum+8])/776.0+ram.lowerlimit); //776 is the portion of 1024 that the divider sets the max input to
+    servoPos[servoNum+8] = servoPos[servoNum+8] > ram.upperlimit ? ram.upperlimit : servoPos[servoNum+8];
+  }
   IEC1CLR= 0x0001; // Disable Change Notice interrupts
   mT3ClearIntFlag();  // Clear interrupt flag
   if(servoPos[mapping[servoNum]] > 0 && servoOnOff[servoNum] == 1 ) {
